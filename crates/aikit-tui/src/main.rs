@@ -12,19 +12,33 @@ use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+struct TerminalGuard;
+
+impl TerminalGuard {
+    fn enter() -> Result<Self> {
+        enable_raw_mode()?;
+        if let Err(err) = stdout().execute(EnterAlternateScreen) {
+            let _ = disable_raw_mode();
+            return Err(err.into());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = stdout().execute(LeaveAlternateScreen);
+    }
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
-    enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
+    let _guard = TerminalGuard::enter()?;
 
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut state = AppState::default();
-    let result = run_app(&mut terminal, &mut state);
-
-    disable_raw_mode()?;
-    stdout().execute(LeaveAlternateScreen)?;
-
-    result
+    run_app(&mut terminal, &mut state)
 }
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, state: &mut AppState) -> Result<()> {
