@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license = "MIT"
+license = "BSD-2-Clause"
 repository = "https://github.com/aikit-rs/aikit"
 
 [workspace.dependencies]
