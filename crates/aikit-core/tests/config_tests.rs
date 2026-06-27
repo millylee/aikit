@@ -25,6 +25,7 @@ fn saves_and_loads_config_as_toml() {
             }),
         }],
         active_selection: None,
+        import_prompt: Default::default(),
         targets: vec![TargetConfig {
             id: "codex".into(),
             enabled: true,

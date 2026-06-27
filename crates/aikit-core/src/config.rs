@@ -12,6 +12,8 @@ use crate::{AikitError, Result};
 pub struct AikitConfig {
     pub providers: Vec<ProviderConfig>,
     pub active_selection: Option<ActiveSelection>,
+    #[serde(default)]
+    pub import_prompt: ImportPromptState,
     pub targets: Vec<TargetConfig>,
     pub backup_history: Vec<BackupRecord>,
 }
@@ -47,6 +49,11 @@ pub struct ActiveSelection {
     pub model_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ImportPromptState {
+    pub skipped_fingerprint: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TargetConfig {
     pub id: String,
@@ -67,6 +74,7 @@ impl Default for AikitConfig {
         Self {
             providers: Vec::new(),
             active_selection: None,
+            import_prompt: ImportPromptState::default(),
             targets: vec![
                 TargetConfig {
                     id: "claude".into(),
