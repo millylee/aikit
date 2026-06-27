@@ -286,9 +286,18 @@ impl AppState {
         }
 
         let mut plan = scan_env(std::env::vars());
-        append_scan_plan(&mut plan, scan_with_default_path("claude", &ClaudeWriter, scan_claude_config));
-        append_scan_plan(&mut plan, scan_with_default_path("gemini", &GeminiWriter, scan_gemini_config));
-        append_scan_plan(&mut plan, scan_with_default_path("codex", &CodexWriter, scan_codex_config));
+        append_scan_plan(
+            &mut plan,
+            scan_with_default_path("claude", &ClaudeWriter, scan_claude_config),
+        );
+        append_scan_plan(
+            &mut plan,
+            scan_with_default_path("gemini", &GeminiWriter, scan_gemini_config),
+        );
+        append_scan_plan(
+            &mut plan,
+            scan_with_default_path("codex", &CodexWriter, scan_codex_config),
+        );
         plan
     }
 
@@ -357,9 +366,8 @@ impl AppState {
 
     pub fn skip_import_prompt(&mut self) -> Result<()> {
         let fingerprint = match self.modal_state.clone() {
-            ModalState::ImportPrompt { fingerprint, .. } | ModalState::ImportList { fingerprint, .. } => {
-                fingerprint
-            }
+            ModalState::ImportPrompt { fingerprint, .. }
+            | ModalState::ImportList { fingerprint, .. } => fingerprint,
             _ => {
                 return Err(AikitError::Provider(
                     "import prompt is not open, cannot skip import".into(),
@@ -492,7 +500,9 @@ impl AppState {
                 }
                 Ok(())
             }
-            _ => Err(AikitError::Provider("modal does not have editable fields".into())),
+            _ => Err(AikitError::Provider(
+                "modal does not have editable fields".into(),
+            )),
         }
     }
 
@@ -619,7 +629,9 @@ impl AppState {
                 self.set_status(format!("Deleted API key {api_key_id}"));
                 Ok(())
             }
-            _ => Err(AikitError::Provider("modal does not require confirmation".into())),
+            _ => Err(AikitError::Provider(
+                "modal does not require confirmation".into(),
+            )),
         }
     }
 
@@ -902,9 +914,8 @@ impl AppState {
     }
 
     fn save_provider_form(&mut self, form: ProviderFormState) -> Result<()> {
-        let enabled = parse_bool_field("enabled", &form.enabled).map_err(|err| {
+        let enabled = parse_bool_field("enabled", &form.enabled).inspect_err(|err| {
             self.set_provider_modal_error(err.to_string());
-            err
         })?;
         let provider_id = form.id.clone();
         let op_result = match &form.mode {

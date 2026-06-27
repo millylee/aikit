@@ -11,7 +11,10 @@ use tempfile::tempdir;
 fn env_scan_imports_openai_key_base_url_and_model() {
     let plan = scan_env([
         ("OPENAI_API_KEY".to_string(), "sk-openai".to_string()),
-        ("OPENAI_BASE_URL".to_string(), "https://api.openai.com/v1".to_string()),
+        (
+            "OPENAI_BASE_URL".to_string(),
+            "https://api.openai.com/v1".to_string(),
+        ),
         ("OPENAI_MODEL".to_string(), "gpt-4.1-mini".to_string()),
     ]);
 
@@ -21,7 +24,10 @@ fn env_scan_imports_openai_key_base_url_and_model() {
     assert_eq!(candidate.source, ImportSource::Env);
     assert_eq!(candidate.provider_id, "openai");
     assert_eq!(candidate.provider_name, "OpenAI");
-    assert_eq!(candidate.base_url.as_deref(), Some("https://api.openai.com/v1"));
+    assert_eq!(
+        candidate.base_url.as_deref(),
+        Some("https://api.openai.com/v1")
+    );
     assert_eq!(candidate.api_key_name.as_deref(), Some("OPENAI_API_KEY"));
     assert_eq!(candidate.api_key_value.as_deref(), Some("sk-openai"));
     assert_eq!(candidate.model.as_deref(), Some("gpt-4.1-mini"));
@@ -31,7 +37,10 @@ fn env_scan_imports_openai_key_base_url_and_model() {
 fn env_scan_imports_anthropic_model_variable() {
     let plan = scan_env([
         ("ANTHROPIC_API_KEY".to_string(), "sk-ant".to_string()),
-        ("ANTHROPIC_BASE_URL".to_string(), "https://anthropic-proxy.example/v1".to_string()),
+        (
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://anthropic-proxy.example/v1".to_string(),
+        ),
         ("ANTHROPIC_MODEL".to_string(), "claude-sonnet-4".to_string()),
     ]);
 
@@ -74,7 +83,10 @@ api_key = "sk-codex"
     assert!(plan.warnings.is_empty());
     let candidate = &plan.candidates[0];
     assert_eq!(candidate.source, ImportSource::Codex);
-    assert_eq!(candidate.base_url.as_deref(), Some("https://proxy.example/v1"));
+    assert_eq!(
+        candidate.base_url.as_deref(),
+        Some("https://proxy.example/v1")
+    );
     assert_eq!(candidate.api_key_value.as_deref(), Some("sk-codex"));
     assert_eq!(candidate.model.as_deref(), Some("model-from-codex"));
 }

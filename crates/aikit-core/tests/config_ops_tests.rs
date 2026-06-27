@@ -1,8 +1,7 @@
 use aikit_core::{
     config::{ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig},
     config_ops::{
-        add_api_key, add_provider, backup_config_file, delete_api_key, delete_provider, ApiKeyForm,
-        ProviderForm,
+        add_provider, backup_config_file, delete_api_key, delete_provider, ProviderForm,
     },
 };
 use tempfile::tempdir;
@@ -23,18 +22,16 @@ fn add_provider_validates_unique_id_and_url() {
     .unwrap();
 
     assert_eq!(config.providers.len(), 1);
-    assert!(
-        add_provider(
-            &mut config,
-            ProviderForm {
-                id: "openrouter".into(),
-                name: "Duplicate".into(),
-                base_url: "https://dup.example/v1".into(),
-                enabled: true,
-            },
-        )
-        .is_err()
-    );
+    assert!(add_provider(
+        &mut config,
+        ProviderForm {
+            id: "openrouter".into(),
+            name: "Duplicate".into(),
+            base_url: "https://dup.example/v1".into(),
+            enabled: true,
+        },
+    )
+    .is_err());
 }
 
 #[test]

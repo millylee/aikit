@@ -24,7 +24,11 @@ pub struct ApiKeyForm {
 
 pub fn add_provider(config: &mut AikitConfig, form: ProviderForm) -> Result<()> {
     validate_provider_form(&form)?;
-    if config.providers.iter().any(|provider| provider.id == form.id) {
+    if config
+        .providers
+        .iter()
+        .any(|provider| provider.id == form.id)
+    {
         return Err(AikitError::Provider(format!(
             "provider id already exists: {}",
             form.id
@@ -204,7 +208,10 @@ pub fn backup_config_file(path: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(backup_path))
 }
 
-fn provider_mut<'a>(config: &'a mut AikitConfig, provider_id: &str) -> Result<&'a mut ProviderConfig> {
+fn provider_mut<'a>(
+    config: &'a mut AikitConfig,
+    provider_id: &str,
+) -> Result<&'a mut ProviderConfig> {
     config
         .providers
         .iter_mut()
@@ -220,7 +227,9 @@ fn validate_provider_form(form: &ProviderForm) -> Result<()> {
         return Err(AikitError::Provider("provider name cannot be empty".into()));
     }
     if form.base_url.trim().is_empty() {
-        return Err(AikitError::Provider("provider base url cannot be empty".into()));
+        return Err(AikitError::Provider(
+            "provider base url cannot be empty".into(),
+        ));
     }
     reqwest::Url::parse(&form.base_url)
         .map_err(|err| AikitError::Provider(format!("invalid provider base url: {err}")))?;

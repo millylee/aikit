@@ -4,9 +4,7 @@ use ratatui::Frame;
 
 use aikit_core::import::{ImportCandidate, ImportSource};
 
-use crate::app::{
-    ApiKeyFormMode, AppState, FocusedPane, ModalState, ProviderFormMode,
-};
+use crate::app::{ApiKeyFormMode, AppState, FocusedPane, ModalState, ProviderFormMode};
 
 pub fn render(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
@@ -358,7 +356,11 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 fn field_cursor(active: bool) -> &'static str {
-    if active { ">" } else { " " }
+    if active {
+        ">"
+    } else {
+        " "
+    }
 }
 
 fn mask_secret(value: &str) -> String {

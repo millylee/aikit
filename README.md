@@ -42,9 +42,9 @@ aikit --version
 
 If the installer just added aikit to your PATH, restart the terminal or run the PATH command printed by the installer before using `aikit`.
 
-### Add a Provider
+### Manage Providers and Keys
 
-The current TUI reads providers from `aikit/config.toml` in your user config directory. Create the file first, then start `aikit`.
+The TUI manages providers and API keys directly in `aikit/config.toml` under your user config directory.
 
 Common config locations:
 
@@ -52,34 +52,27 @@ Common config locations:
 - macOS: `~/Library/Application Support/aikit/config.toml`
 - Linux: `~/.config/aikit/config.toml`
 
-Minimal example:
+Provider management keys in the main TUI:
 
-```toml
-[[providers]]
-id = "openrouter"
-name = "OpenRouter"
-base_url = "https://openrouter.ai/api/v1"
-enabled = true
+- `a`: add provider.
+- `e`: edit selected provider.
+- `d`: delete selected provider (with confirmation).
+- `k`: add API key to selected provider.
+- `x`: delete selected API key (with confirmation).
 
-[[providers.api_keys]]
-id = "default"
-name = "Default"
-value = "sk-..."
+Import keys and behavior:
 
-[[targets]]
-id = "claude"
-enabled = true
+- `i`: scan and import provider candidates.
+- On startup, if no providers are configured and import candidates are found, `aikit` shows an import prompt before changing config.
+- In the prompt, you can import all, skip, or open the selectable candidate list.
 
-[[targets]]
-id = "gemini"
-enabled = true
+Supported environment variables for import:
 
-[[targets]]
-id = "codex"
-enabled = true
-```
+- OpenAI: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`
+- Anthropic: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`
+- Gemini: `GEMINI_API_KEY`, `GEMINI_BASE_URL`, `GEMINI_MODEL`
 
-API keys are stored as plain text in the local config file.
+Security note: imported API keys are saved in local TOML as plain text. Keep your machine and config directory protected.
 
 ### TUI Keys
 

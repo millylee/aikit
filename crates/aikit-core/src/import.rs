@@ -296,7 +296,10 @@ pub fn apply_import_candidates(
         if let Some(api_key_value) = &candidate.api_key_value {
             let base_key_id = normalize_api_key_id(candidate.api_key_name.as_deref());
             let has_same_id = provider.api_keys.iter().any(|key| key.id == base_key_id);
-            let has_same_value = provider.api_keys.iter().any(|key| key.value == *api_key_value);
+            let has_same_value = provider
+                .api_keys
+                .iter()
+                .any(|key| key.value == *api_key_value);
 
             if !has_same_id && !has_same_value {
                 let key_name = candidate
