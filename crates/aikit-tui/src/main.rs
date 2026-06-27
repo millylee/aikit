@@ -41,7 +41,10 @@ fn main() -> Result<()> {
     run_app(&mut terminal, &mut state)
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, state: &mut AppState) -> Result<()> {
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    state: &mut AppState,
+) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, state))?;
 

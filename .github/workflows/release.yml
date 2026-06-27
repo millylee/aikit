@@ -1,0 +1,76 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive_ext: tar.gz
+            binary: aikit
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive_ext: tar.gz
+            binary: aikit
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive_ext: tar.gz
+            binary: aikit
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive_ext: zip
+            binary: aikit.exe
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package archive
+        shell: pwsh
+        run: |
+          $target = "${{ matrix.target }}"
+          $archive = "aikit-${target}.${{ matrix.archive_ext }}"
+          $binary = "${{ matrix.binary }}"
+          $source = Join-Path (Join-Path (Join-Path "target" $target) "release") $binary
+          $staging = Join-Path $env:RUNNER_TEMP "aikit-package"
+
+          if (Test-Path $staging) {
+            Remove-Item -Recurse -Force $staging
+          }
+          New-Item -ItemType Directory -Path $staging | Out-Null
+          Copy-Item $source (Join-Path $staging $binary)
+
+          if ("${{ matrix.archive_ext }}" -eq "zip") {
+            Compress-Archive -Path (Join-Path $staging $binary) -DestinationPath $archive -Force
+          } else {
+            tar -czf $archive -C $staging $binary
+          }
+
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Out-File -FilePath "$archive.sha256" -Encoding ascii
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            aikit-${{ matrix.target }}.${{ matrix.archive_ext }}
+            aikit-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256

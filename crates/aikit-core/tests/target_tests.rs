@@ -1,4 +1,6 @@
-use aikit_core::targets::{claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection};
+use aikit_core::targets::{
+    claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
+};
 use tempfile::tempdir;
 
 #[test]
@@ -102,10 +104,7 @@ fn codex_writer_serializes_special_characters_in_toml() {
         provider.get("api_key").and_then(|v| v.as_str()),
         Some(selection.api_key.as_str())
     );
-    assert_eq!(
-        provider.get("name").and_then(|v| v.as_str()),
-        Some("aikit")
-    );
+    assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
 }
 
 #[test]
@@ -146,7 +145,9 @@ fn gemini_writer_refuses_invalid_json() {
     );
 
     assert!(result.is_err());
-    assert!(std::fs::read_to_string(path).unwrap().contains("{invalid json"));
+    assert!(std::fs::read_to_string(path)
+        .unwrap()
+        .contains("{invalid json"));
 }
 
 #[test]

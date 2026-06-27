@@ -26,14 +26,8 @@ impl CodexWriter {
         }
 
         let mut root = toml::map::Map::new();
-        root.insert(
-            "model".into(),
-            toml::Value::String(selection.model.clone()),
-        );
-        root.insert(
-            "model_provider".into(),
-            toml::Value::String("aikit".into()),
-        );
+        root.insert("model".into(), toml::Value::String(selection.model.clone()));
+        root.insert("model_provider".into(), toml::Value::String("aikit".into()));
 
         let mut provider = toml::map::Map::new();
         provider.insert("name".into(), toml::Value::String("aikit".into()));

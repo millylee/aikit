@@ -29,7 +29,10 @@ fn ctrl_s_requests_apply() {
 #[test]
 fn r_requests_model_refresh() {
     let mut state = AppState::default();
-    let action = handle_key(&mut state, KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+    );
 
     assert_eq!(action, AppAction::RefreshModels);
 }

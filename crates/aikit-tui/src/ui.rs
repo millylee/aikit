@@ -21,21 +21,10 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         ])
         .split(main_layout[0]);
 
-    let providers = Paragraph::new("").block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Providers"),
-    );
-    let details = Paragraph::new("").block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Details"),
-    );
-    let targets = Paragraph::new("").block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Targets"),
-    );
+    let providers =
+        Paragraph::new("").block(Block::default().borders(Borders::ALL).title("Providers"));
+    let details = Paragraph::new("").block(Block::default().borders(Borders::ALL).title("Details"));
+    let targets = Paragraph::new("").block(Block::default().borders(Borders::ALL).title("Targets"));
 
     frame.render_widget(providers, panes_layout[0]);
     frame.render_widget(details, panes_layout[1]);

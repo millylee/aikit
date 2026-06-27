@@ -32,17 +32,13 @@ impl OpenAiCompatibleClient {
             .await
             .map_err(|err| AikitError::Provider(format!("network error: {err}")))?;
         let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(AikitError::Provider(
                 "authentication or permission problem".into(),
             ));
         }
         if status == reqwest::StatusCode::NOT_FOUND {
-            return Err(AikitError::Provider(
-                "models endpoint was not found".into(),
-            ));
+            return Err(AikitError::Provider("models endpoint was not found".into()));
         }
         if !status.is_success() {
             return Err(AikitError::Provider(format!(

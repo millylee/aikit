@@ -55,10 +55,7 @@ impl TargetWriter for ClaudeWriter {
     fn default_path(&self) -> Result<PathBuf> {
         let dirs = BaseDirs::new()
             .ok_or_else(|| AikitError::TargetWrite("could not determine home directory".into()))?;
-        Ok(dirs
-            .home_dir()
-            .join(".claude")
-            .join("settings.json"))
+        Ok(dirs.home_dir().join(".claude").join("settings.json"))
     }
 
     fn write(&self, selection: &TargetSelection) -> Result<TargetWriteResult> {
