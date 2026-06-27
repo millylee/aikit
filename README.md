@@ -7,7 +7,7 @@ It is built with [Ratatui](https://ratatui.rs/) and currently targets OpenAI-com
 ## Features
 
 - Manage multiple AI providers with `base_url` and multiple API keys.
-- Cache provider model lists locally and refresh them only on demand.
+- Cache provider model lists locally, refresh them only on demand, and add manual models for proxy services.
 - Select a global provider + API key + model combination.
 - Apply the active selection to Claude Code, Gemini CLI, and Codex configs.
 - Back up existing target config files before writing.
@@ -57,8 +57,9 @@ Provider management keys in the main TUI:
 - `a`: add provider.
 - `e`: edit selected provider.
 - `d`: delete selected provider (with confirmation).
-- `+`: add API key to selected provider.
+- `+`: add API key to selected provider. The form only asks for the key value; `aikit` generates the internal key id and display name.
 - `x`: delete selected API key (with confirmation).
+- `m`: manually add a model to the selected provider.
 
 Import keys and behavior:
 
@@ -84,6 +85,7 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 - `Enter`: activate the selected provider, API key, model, or toggle the selected target.
 - `Space`: toggle the selected target when the Targets pane is focused.
 - `r`: refresh models for the selected provider using the selected API key.
+- `m`: add a manual model for the selected provider.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
 - `q` / `Esc`: quit.
 

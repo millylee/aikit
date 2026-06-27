@@ -41,6 +41,7 @@ pub fn add_provider(config: &mut AikitConfig, form: ProviderForm) -> Result<()> 
         base_url: form.base_url,
         enabled: form.enabled,
         api_keys: Vec::new(),
+        manual_models: Vec::new(),
         models_cache: None,
     });
     Ok(())

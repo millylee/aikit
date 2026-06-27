@@ -56,6 +56,7 @@ pub enum ModalState {
     None,
     ProviderForm(ProviderFormState),
     ApiKeyForm(ApiKeyFormState),
+    ModelForm(ModelFormState),
     ConfirmDeleteProvider {
         provider_id: String,
     },
@@ -111,6 +112,13 @@ pub struct ApiKeyFormState {
     pub id: String,
     pub name: String,
     pub value: String,
+    pub validation_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelFormState {
+    pub provider_id: String,
+    pub model: String,
     pub validation_error: Option<String>,
 }
 
@@ -249,6 +257,19 @@ impl AppState {
             id: key.id.clone(),
             name: key.name.clone(),
             value: key.value.clone(),
+            validation_error: None,
+        });
+        Ok(())
+    }
+
+    pub fn open_add_model_modal(&mut self) -> Result<()> {
+        let provider_id = self
+            .selected_provider()
+            .map(|provider| provider.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        self.modal_state = ModalState::ModelForm(ModelFormState {
+            provider_id,
+            model: String::new(),
             validation_error: None,
         });
         Ok(())
@@ -521,12 +542,22 @@ impl AppState {
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
                 match field {
-                    "id" => form.id = value.into(),
-                    "name" => form.name = value.into(),
                     "value" => form.value = value.into(),
                     other => {
                         return Err(AikitError::Provider(format!(
                             "unknown api key field: {other}"
+                        )))
+                    }
+                }
+                Ok(())
+            }
+            ModalState::ModelForm(form) => {
+                form.validation_error = None;
+                match field {
+                    "model" => form.model = value.into(),
+                    other => {
+                        return Err(AikitError::Provider(format!(
+                            "unknown model field: {other}"
                         )))
                     }
                 }
@@ -544,7 +575,7 @@ impl AppState {
                 form.current_field = (form.current_field + 1) % 4;
             }
             ModalState::ApiKeyForm(form) => {
-                form.current_field = (form.current_field + 1) % 3;
+                form.current_field = 0;
             }
             _ => {}
         }
@@ -556,7 +587,7 @@ impl AppState {
                 form.current_field = (form.current_field + 4 - 1) % 4;
             }
             ModalState::ApiKeyForm(form) => {
-                form.current_field = (form.current_field + 3 - 1) % 3;
+                form.current_field = 0;
             }
             _ => {}
         }
@@ -577,12 +608,12 @@ impl AppState {
             }
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
-                match form.current_field {
-                    0 => form.id.push(ch),
-                    1 => form.name.push(ch),
-                    2 => form.value.push(ch),
-                    _ => {}
-                }
+                form.value.push(ch);
+                Ok(())
+            }
+            ModalState::ModelForm(form) => {
+                form.validation_error = None;
+                form.model.push(ch);
                 Ok(())
             }
             _ => Err(AikitError::Provider("no modal form is open".into())),
@@ -612,18 +643,12 @@ impl AppState {
             }
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
-                match form.current_field {
-                    0 => {
-                        form.id.pop();
-                    }
-                    1 => {
-                        form.name.pop();
-                    }
-                    2 => {
-                        form.value.pop();
-                    }
-                    _ => {}
-                }
+                form.value.pop();
+                Ok(())
+            }
+            ModalState::ModelForm(form) => {
+                form.validation_error = None;
+                form.model.pop();
                 Ok(())
             }
             _ => Err(AikitError::Provider("no modal form is open".into())),
@@ -634,6 +659,7 @@ impl AppState {
         match self.modal_state.clone() {
             ModalState::ProviderForm(form) => self.save_provider_form(form),
             ModalState::ApiKeyForm(form) => self.save_api_key_form(form),
+            ModalState::ModelForm(form) => self.save_model_form(form),
             _ => Err(AikitError::Provider("modal is not a saveable form".into())),
         }
     }
@@ -686,9 +712,7 @@ impl AppState {
 
     pub fn selected_model(&self) -> Option<&str> {
         self.selected_provider()
-            .and_then(|provider| provider.models_cache.as_ref())
-            .and_then(|cache| cache.models.get(self.model_index))
-            .map(String::as_str)
+            .and_then(|provider| provider_model_at(provider, self.model_index))
     }
 
     pub fn selected_target(&self) -> Option<&TargetConfig> {
@@ -808,12 +832,7 @@ impl AppState {
     pub fn detail_item_count(&self) -> usize {
         self.selected_provider()
             .map(|provider| {
-                provider.api_keys.len()
-                    + provider
-                        .models_cache
-                        .as_ref()
-                        .map(|cache| cache.models.len())
-                        .unwrap_or(0)
+                provider.api_keys.len() + provider_model_count(provider)
             })
             .unwrap_or(0)
     }
@@ -857,11 +876,7 @@ impl AppState {
             return;
         };
         let key_count = provider.api_keys.len();
-        let model_count = provider
-            .models_cache
-            .as_ref()
-            .map(|cache| cache.models.len())
-            .unwrap_or(0);
+        let model_count = provider_model_count(provider);
         let active_key_index = self.config.active_selection.as_ref().and_then(|active| {
             (active.provider_id == provider.id).then(|| {
                 provider
@@ -871,14 +886,8 @@ impl AppState {
             })?
         });
         let active_model_index = self.config.active_selection.as_ref().and_then(|active| {
-            (active.provider_id == provider.id).then(|| {
-                provider.models_cache.as_ref().and_then(|cache| {
-                    cache
-                        .models
-                        .iter()
-                        .position(|model| model == &active.model_id)
-                })
-            })?
+            (active.provider_id == provider.id)
+                .then(|| provider_model_position(provider, &active.model_id))?
         });
 
         self.key_index = self.key_index.min(key_count.saturating_sub(1));
@@ -921,15 +930,11 @@ impl AppState {
         };
         let api_key_id = api_key.id.clone();
         let api_key_name = api_key.name.clone();
-        let Some(model) = provider
-            .models_cache
-            .as_ref()
-            .and_then(|cache| cache.models.get(self.model_index))
-        else {
-            self.set_status("Selected provider has no cached models");
+        let Some(model) = provider_model_at(provider, self.model_index) else {
+            self.set_status("Selected provider has no models");
             return;
         };
-        let model = model.clone();
+        let model = model.to_string();
 
         self.config.active_selection = Some(ActiveSelection {
             provider_id,
@@ -951,12 +956,8 @@ impl AppState {
         if provider.api_keys.is_empty() {
             return Some("Add an API key with + before applying targets");
         }
-        if provider
-            .models_cache
-            .as_ref()
-            .is_none_or(|cache| cache.models.is_empty())
-        {
-            return Some("Refresh models with r, then select a model before applying targets");
+        if provider_model_count(provider) == 0 {
+            return Some("Refresh models with r or add a model with m before applying targets");
         }
         Some("Select provider, API key, and model with Enter before applying targets")
     }
@@ -1024,15 +1025,42 @@ impl AppState {
     }
 
     fn save_api_key_form(&mut self, form: ApiKeyFormState) -> Result<()> {
-        let key_id = form.id.clone();
+        let (key_id, key_name) = match &form.mode {
+            ApiKeyFormMode::Add => {
+                let provider = self
+                    .config
+                    .providers
+                    .iter()
+                    .find(|provider| provider.id == form.provider_id)
+                    .ok_or_else(|| {
+                        AikitError::Provider(format!("provider not found: {}", form.provider_id))
+                    })?;
+                next_api_key_identity(provider)
+            }
+            ApiKeyFormMode::Edit { original_id } => {
+                let key = self
+                    .config
+                    .providers
+                    .iter()
+                    .find(|provider| provider.id == form.provider_id)
+                    .and_then(|provider| {
+                        provider
+                            .api_keys
+                            .iter()
+                            .find(|key| key.id == original_id.as_str())
+                    })
+                    .ok_or_else(|| AikitError::Provider(format!("api key not found: {original_id}")))?;
+                (key.id.clone(), key.name.clone())
+            }
+        };
         let mut next_config = self.config.clone();
         let op_result = match &form.mode {
             ApiKeyFormMode::Add => add_api_key(
                 &mut next_config,
                 &form.provider_id,
                 ApiKeyForm {
-                    id: form.id,
-                    name: form.name,
+                    id: key_id.clone(),
+                    name: key_name,
                     value: form.value,
                 },
             ),
@@ -1041,8 +1069,8 @@ impl AppState {
                 &form.provider_id,
                 original_id,
                 ApiKeyForm {
-                    id: form.id,
-                    name: form.name,
+                    id: key_id.clone(),
+                    name: key_name,
                     value: form.value,
                 },
             ),
@@ -1074,6 +1102,51 @@ impl AppState {
         Ok(())
     }
 
+    fn save_model_form(&mut self, form: ModelFormState) -> Result<()> {
+        let model = form.model.trim().to_string();
+        if model.is_empty() {
+            let err = AikitError::Provider("model cannot be empty".into());
+            self.set_model_modal_error(err.to_string());
+            return Err(err);
+        }
+
+        let mut next_config = self.config.clone();
+        let provider = next_config
+            .providers
+            .iter_mut()
+            .find(|provider| provider.id == form.provider_id)
+            .ok_or_else(|| AikitError::Provider(format!("provider not found: {}", form.provider_id)))?;
+        let already_cached = provider
+            .models_cache
+            .as_ref()
+            .is_some_and(|cache| cache.models.iter().any(|cached| cached == &model));
+        let already_manual = provider.manual_models.iter().any(|manual| manual == &model);
+        if !already_cached && !already_manual {
+            provider.manual_models.push(model.clone());
+        }
+
+        self.persist_config_if_file_backed_config(&next_config)?;
+        self.config = next_config;
+        if let Some(provider_index) = self
+            .config
+            .providers
+            .iter()
+            .position(|provider| provider.id == form.provider_id)
+        {
+            self.provider_index = provider_index;
+            if let Some(provider) = self.config.providers.get(provider_index) {
+                if let Some(index) = provider_model_position(provider, &model) {
+                    self.model_index = index;
+                    self.detail_index = provider.api_keys.len() + index;
+                }
+            }
+        }
+        self.normalize_selection_indices();
+        self.modal_state = ModalState::None;
+        self.set_status(format!("Saved model {model}"));
+        Ok(())
+    }
+
     fn set_provider_modal_error(&mut self, message: String) {
         if let ModalState::ProviderForm(form) = &mut self.modal_state {
             form.validation_error = Some(message);
@@ -1082,6 +1155,12 @@ impl AppState {
 
     fn set_api_key_modal_error(&mut self, message: String) {
         if let ModalState::ApiKeyForm(form) = &mut self.modal_state {
+            form.validation_error = Some(message);
+        }
+    }
+
+    fn set_model_modal_error(&mut self, message: String) {
+        if let ModalState::ModelForm(form) = &mut self.modal_state {
             form.validation_error = Some(message);
         }
     }
@@ -1209,16 +1288,10 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         .ok_or_else(|| {
             AikitError::ConfigParse(format!("active api key not found: {}", active.api_key_id))
         })?;
-    let cache = provider.models_cache.as_ref().ok_or_else(|| {
-        AikitError::ConfigParse(format!(
-            "no cached models for active provider: {}",
-            active.provider_id
-        ))
-    })?;
-    if !cache.models.iter().any(|model| model == &active.model_id) {
+    if active.model_id.trim().is_empty() {
         return Err(AikitError::ConfigParse(format!(
-            "active model is not cached: {}",
-            active.model_id
+            "active model is empty for provider: {}",
+            active.provider_id
         )));
     }
 
@@ -1309,6 +1382,65 @@ fn load_or_default(config_path: &Path) -> Result<AikitConfig> {
         AikitConfig::load_from(config_path)
     } else {
         Ok(AikitConfig::default())
+    }
+}
+
+fn provider_model_count(provider: &ProviderConfig) -> usize {
+    provider
+        .models_cache
+        .as_ref()
+        .map(|cache| cache.models.len())
+        .unwrap_or(0)
+        + provider.manual_models.len()
+}
+
+fn provider_model_at(provider: &ProviderConfig, index: usize) -> Option<&str> {
+    let cached_count = provider
+        .models_cache
+        .as_ref()
+        .map(|cache| cache.models.len())
+        .unwrap_or(0);
+    if index < cached_count {
+        return provider
+            .models_cache
+            .as_ref()
+            .and_then(|cache| cache.models.get(index))
+            .map(String::as_str);
+    }
+    provider
+        .manual_models
+        .get(index.saturating_sub(cached_count))
+        .map(String::as_str)
+}
+
+fn provider_model_position(provider: &ProviderConfig, model_id: &str) -> Option<usize> {
+    let cached_count = provider
+        .models_cache
+        .as_ref()
+        .map(|cache| cache.models.len())
+        .unwrap_or(0);
+    if let Some(index) = provider
+        .models_cache
+        .as_ref()
+        .and_then(|cache| cache.models.iter().position(|model| model == model_id))
+    {
+        return Some(index);
+    }
+    provider
+        .manual_models
+        .iter()
+        .position(|model| model == model_id)
+        .map(|index| cached_count + index)
+}
+
+fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
+    let mut number = provider.api_keys.len() + 1;
+    loop {
+        let id = format!("key-{number}");
+        if !provider.api_keys.iter().any(|key| key.id == id.as_str()) {
+            return (id, format!("Key {number}"));
+        }
+        number += 1;
     }
 }
 

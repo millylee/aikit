@@ -240,9 +240,39 @@ fn claude_writer_creates_minimal_json_config() {
 
     let updated = std::fs::read_to_string(path).unwrap();
     let value: serde_json::Value = serde_json::from_str(&updated).unwrap();
-    assert_eq!(value["aikit"]["model"], "claude-model");
-    assert_eq!(value["aikit"]["base_url"], "https://example.com/v1");
-    assert_eq!(value["aikit"]["api_key"], "sk-new");
+    assert_eq!(value["env"]["ANTHROPIC_MODEL"], "claude-model");
+    assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
+    assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
+}
+
+#[test]
+fn claude_writer_preserves_existing_json_and_writes_native_env() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"theme":"dark","env":{"KEEP":"yes","ANTHROPIC_MODEL":"old"}}"#,
+    )
+    .unwrap();
+
+    let result = ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+        },
+    )
+    .unwrap();
+
+    assert!(result.backup_path.unwrap().exists());
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["theme"], "dark");
+    assert_eq!(value["env"]["KEEP"], "yes");
+    assert_eq!(value["env"]["ANTHROPIC_MODEL"], "claude-model");
+    assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
+    assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
 }
 
 #[test]

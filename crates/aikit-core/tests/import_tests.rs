@@ -1,8 +1,8 @@
 use aikit_core::{
     config::{AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig},
     import::{
-        apply_import_candidates, candidate_fingerprint, scan_codex_config, scan_env,
-        scan_gemini_config, ImportCandidate, ImportSource,
+        apply_import_candidates, candidate_fingerprint, scan_claude_config, scan_codex_config,
+        scan_env, scan_gemini_config, ImportCandidate, ImportSource,
     },
 };
 use tempfile::tempdir;
@@ -92,6 +92,38 @@ api_key = "sk-codex"
 }
 
 #[test]
+fn claude_scan_reads_native_env_fields() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"
+{
+  "theme": "dark",
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-claude",
+    "ANTHROPIC_BASE_URL": "https://claude-proxy.example/v1",
+    "ANTHROPIC_MODEL": "claude-sonnet-4"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let plan = scan_claude_config(&path);
+
+    assert!(plan.warnings.is_empty());
+    let candidate = &plan.candidates[0];
+    assert_eq!(candidate.source, ImportSource::Claude);
+    assert_eq!(
+        candidate.base_url.as_deref(),
+        Some("https://claude-proxy.example/v1")
+    );
+    assert_eq!(candidate.api_key_value.as_deref(), Some("sk-claude"));
+    assert_eq!(candidate.model.as_deref(), Some("claude-sonnet-4"));
+}
+
+#[test]
 fn invalid_gemini_config_returns_warning_not_error() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");
@@ -116,6 +148,7 @@ fn merge_preserves_existing_name_enabled_and_model_cache() {
                 name: "Default".into(),
                 value: "sk-existing".into(),
             }],
+            manual_models: Vec::new(),
             models_cache: Some(ModelCache {
                 refreshed_at: "old".into(),
                 models: vec!["cached-model".into()],
@@ -147,6 +180,7 @@ fn merge_preserves_existing_name_enabled_and_model_cache() {
         config.providers[0].models_cache.as_ref().unwrap().models,
         vec!["cached-model"]
     );
+    assert_eq!(config.providers[0].manual_models, vec!["imported-model"]);
     assert_eq!(config.providers[0].api_keys.len(), 2);
 }
 

@@ -46,6 +46,22 @@ fn r_requests_model_refresh() {
 }
 
 #[test]
+fn m_opens_add_model_modal() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert!(matches!(state.modal_state, ModalState::ModelForm(_)));
+}
+
+#[test]
 fn load_config_populates_visible_provider_key_model_and_target_state() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
@@ -103,6 +119,22 @@ fn enter_selects_active_key_and_model_independently() {
 }
 
 #[test]
+fn active_target_selection_allows_manual_model_without_cache() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers[0].models_cache = None;
+    config.providers[0].manual_models = vec!["manual-model".into()];
+    config.active_selection = Some(ActiveSelection {
+        provider_id: "provider".into(),
+        api_key_id: "key".into(),
+        model_id: "manual-model".into(),
+    });
+
+    let selection = active_target_selection(&config).unwrap();
+
+    assert_eq!(selection.model, "manual-model");
+}
+
+#[test]
 fn space_toggles_selected_target() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
@@ -145,6 +177,7 @@ fn j_and_k_move_selection_in_focused_pane() {
         base_url: "https://other.example/v1".into(),
         enabled: true,
         api_keys: vec![],
+        manual_models: Vec::new(),
         models_cache: None,
     });
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
@@ -200,6 +233,7 @@ fn arrow_keys_move_selection_in_focused_pane() {
         base_url: "https://other.example/v1".into(),
         enabled: true,
         api_keys: vec![],
+        manual_models: Vec::new(),
         models_cache: None,
     });
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
@@ -259,6 +293,7 @@ fn apply_active_selection_without_api_key_reports_actionable_message() {
             base_url: "https://anyrouter.top/v1".into(),
             enabled: true,
             api_keys: vec![],
+            manual_models: Vec::new(),
             models_cache: None,
         }],
         targets: vec![TargetConfig {
@@ -350,6 +385,7 @@ fn api_key_modal_save_adds_key_to_selected_provider() {
                 base_url: "https://example.com/v1".into(),
                 enabled: true,
                 api_keys: vec![],
+                manual_models: Vec::new(),
                 models_cache: None,
             }],
             ..AikitConfig::default()
@@ -357,12 +393,30 @@ fn api_key_modal_save_adds_key_to_selected_provider() {
     );
 
     state.open_add_api_key_modal().unwrap();
-    state.set_modal_field("id", "default").unwrap();
-    state.set_modal_field("name", "Default").unwrap();
     state.set_modal_field("value", "sk-test").unwrap();
     state.save_modal().unwrap();
 
-    assert_eq!(state.config.providers[0].api_keys[0].id, "default");
+    assert_eq!(state.config.providers[0].api_keys[0].id, "key-1");
+    assert_eq!(state.config.providers[0].api_keys[0].name, "Key 1");
+    assert_eq!(state.config.providers[0].api_keys[0].value, "sk-test");
+}
+
+#[test]
+fn model_modal_save_adds_manual_model_to_selected_provider() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+
+    state.open_add_model_modal().unwrap();
+    state.set_modal_field("model", "proxy-model").unwrap();
+    state.save_modal().unwrap();
+
+    assert_eq!(
+        state.config.providers[0].manual_models,
+        vec!["proxy-model".to_string()]
+    );
+    assert_eq!(state.selected_model(), Some("proxy-model"));
 }
 
 #[test]
@@ -594,6 +648,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
                 name: "Key".into(),
                 value: "sk-active".into(),
             }],
+            manual_models: Vec::new(),
             models_cache: Some(ModelCache {
                 refreshed_at: "2026-06-27T00:00:00Z".into(),
                 models: vec!["model-active".into(), "model-other".into()],

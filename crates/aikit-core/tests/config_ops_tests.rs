@@ -76,6 +76,7 @@ fn sample_config() -> AikitConfig {
                 name: "Key".into(),
                 value: "sk".into(),
             }],
+            manual_models: Vec::new(),
             models_cache: Some(ModelCache {
                 refreshed_at: "old".into(),
                 models: vec!["model".into()],

@@ -33,11 +33,27 @@ impl ClaudeWriter {
             fs::create_dir_all(parent)?;
         }
 
-        value["aikit"] = serde_json::json!({
-            "base_url": selection.base_url,
-            "api_key": selection.api_key,
-            "model": selection.model,
-        });
+        let object = value.as_object_mut().ok_or_else(|| {
+            AikitError::TargetWrite("claude json config root must be an object".into())
+        })?;
+        let env = object
+            .entry("env")
+            .or_insert_with(|| serde_json::json!({}));
+        let env_object = env.as_object_mut().ok_or_else(|| {
+            AikitError::TargetWrite("claude env config must be an object".into())
+        })?;
+        env_object.insert(
+            "ANTHROPIC_AUTH_TOKEN".into(),
+            Value::String(selection.api_key.clone()),
+        );
+        env_object.insert(
+            "ANTHROPIC_BASE_URL".into(),
+            Value::String(selection.base_url.clone()),
+        );
+        env_object.insert(
+            "ANTHROPIC_MODEL".into(),
+            Value::String(selection.model.clone()),
+        );
 
         let content = serde_json::to_string_pretty(&value).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize claude config: {err}"))

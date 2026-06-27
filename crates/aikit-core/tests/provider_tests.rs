@@ -67,6 +67,7 @@ async fn refresh_failure_keeps_existing_cache() {
             name: "Key".into(),
             value: "bad".into(),
         }],
+        manual_models: Vec::new(),
         models_cache: Some(ModelCache {
             refreshed_at: "old".into(),
             models: vec!["old-model".into()],

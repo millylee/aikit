@@ -18,6 +18,7 @@ fn saves_and_loads_config_as_toml() {
                 name: "Work".into(),
                 value: "sk-test".into(),
             }],
+            manual_models: Vec::new(),
             models_cache: Some(ModelCache {
                 refreshed_at: "2026-06-27T00:00:00Z".into(),
                 models: vec!["openai/gpt-4.1-mini".into()],

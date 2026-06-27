@@ -180,7 +180,7 @@ pub fn candidate_fingerprint(candidates: &[ImportCandidate]) -> String {
 }
 
 pub fn scan_claude_config(path: &Path) -> ImportPlan {
-    scan_json_aikit_config(path, ImportSource::Claude)
+    scan_claude_json_config(path)
 }
 
 pub fn scan_gemini_config(path: &Path) -> ImportPlan {
@@ -284,6 +284,7 @@ pub fn apply_import_candidates(
                     base_url,
                     enabled: true,
                     api_keys: Vec::new(),
+                    manual_models: Vec::new(),
                     models_cache: None,
                 });
                 result.added_providers += 1;
@@ -295,6 +296,16 @@ pub fn apply_import_candidates(
         if provider.base_url.is_empty() {
             if let Some(base_url) = &candidate.base_url {
                 provider.base_url = base_url.clone();
+            }
+        }
+
+        if let Some(model) = &candidate.model {
+            let cached = provider
+                .models_cache
+                .as_ref()
+                .is_some_and(|cache| cache.models.iter().any(|cached| cached == model));
+            if !cached && !provider.manual_models.iter().any(|manual| manual == model) {
+                provider.manual_models.push(model.clone());
             }
         }
 
@@ -395,6 +406,68 @@ fn scan_json_aikit_config(path: &Path, source: ImportSource) -> ImportPlan {
             provider_name: title_case_provider_name(&provider_id),
             base_url,
             api_key_name: api_key_value.as_ref().map(|_| "aikit-api-key".to_string()),
+            api_key_value,
+            model,
+            warnings: Vec::new(),
+        }],
+        warnings: Vec::new(),
+    }
+}
+
+fn scan_claude_json_config(path: &Path) -> ImportPlan {
+    let data = match read_file_if_exists(path) {
+        Ok(Some(data)) => data,
+        Ok(None) => return ImportPlan::default(),
+        Err(err) => {
+            return ImportPlan {
+                candidates: Vec::new(),
+                warnings: vec![format!("failed to read claude config: {err}")],
+            }
+        }
+    };
+
+    let value: JsonValue = match serde_json::from_str(&data) {
+        Ok(value) => value,
+        Err(err) => {
+            return ImportPlan {
+                candidates: Vec::new(),
+                warnings: vec![format!("failed to parse claude config: {err}")],
+            }
+        }
+    };
+
+    let env = value.get("env").and_then(JsonValue::as_object);
+    let legacy_aikit = value.get("aikit").and_then(JsonValue::as_object);
+    let base_url = env
+        .and_then(|node| node.get("ANTHROPIC_BASE_URL"))
+        .or_else(|| legacy_aikit.and_then(|node| node.get("base_url")))
+        .and_then(JsonValue::as_str)
+        .map(ToOwned::to_owned);
+    let api_key_value = env
+        .and_then(|node| node.get("ANTHROPIC_AUTH_TOKEN"))
+        .or_else(|| env.and_then(|node| node.get("ANTHROPIC_API_KEY")))
+        .or_else(|| legacy_aikit.and_then(|node| node.get("api_key")))
+        .and_then(JsonValue::as_str)
+        .map(ToOwned::to_owned);
+    let model = env
+        .and_then(|node| node.get("ANTHROPIC_MODEL"))
+        .or_else(|| legacy_aikit.and_then(|node| node.get("model")))
+        .and_then(JsonValue::as_str)
+        .map(ToOwned::to_owned);
+
+    if base_url.is_none() && api_key_value.is_none() && model.is_none() {
+        return ImportPlan::default();
+    }
+
+    ImportPlan {
+        candidates: vec![ImportCandidate {
+            source: ImportSource::Claude,
+            provider_id: "claude".to_string(),
+            provider_name: "Claude".to_string(),
+            base_url,
+            api_key_name: api_key_value
+                .as_ref()
+                .map(|_| "ANTHROPIC_AUTH_TOKEN".to_string()),
             api_key_value,
             model,
             warnings: Vec::new(),

@@ -143,6 +143,12 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             }
             AppAction::None
         }
+        (KeyCode::Char('m'), _) => {
+            if let Err(err) = state.open_add_model_modal() {
+                state.set_status(format!("Open modal failed: {err}"));
+            }
+            AppAction::None
+        }
         (KeyCode::Char('i'), _) => {
             if let Err(err) = state.open_import_prompt() {
                 state.set_status(format!("Open modal failed: {err}"));

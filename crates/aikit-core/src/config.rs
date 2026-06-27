@@ -25,6 +25,8 @@ pub struct ProviderConfig {
     pub base_url: String,
     pub enabled: bool,
     pub api_keys: Vec<ApiKeyConfig>,
+    #[serde(default)]
+    pub manual_models: Vec<String>,
     pub models_cache: Option<ModelCache>,
 }
 

@@ -110,9 +110,10 @@ fn providers_text(state: &AppState) -> String {
                 .models_cache
                 .as_ref()
                 .map(|cache| cache.models.len())
-                .unwrap_or(0);
+                .unwrap_or(0)
+                + provider.manual_models.len();
             format!(
-                "{cursor}{active} {} ({enabled})\n  {} cached model(s)",
+                "{cursor}{active} {} ({enabled})\n  {} model(s)",
                 provider.name, model_count
             )
         })
@@ -152,29 +153,50 @@ fn details_text(state: &AppState) -> String {
 
     lines.push("Models:".into());
     let key_count = provider.api_keys.len();
-    match provider.models_cache.as_ref() {
-        Some(cache) if !cache.models.is_empty() => {
-            for (index, model) in cache.models.iter().enumerate() {
-                let detail_index = key_count + index;
-                let cursor = if state.detail_index() == detail_index {
-                    ">"
-                } else {
-                    " "
-                };
-                let active_model = active
-                    .filter(|selection| {
-                        selection.provider_id == provider.id && selection.model_id == *model
-                    })
-                    .map(|_| "*")
-                    .unwrap_or(" ");
-                lines.push(format!("{cursor}{active_model} {model}"));
-            }
+    let cached_models = provider
+        .models_cache
+        .as_ref()
+        .map(|cache| cache.models.as_slice())
+        .unwrap_or(&[]);
+    if cached_models.is_empty() && provider.manual_models.is_empty() {
+        lines.push("  No models; press r to refresh or m to add one.".into());
+    } else {
+        for (index, model) in cached_models.iter().enumerate() {
+            let detail_index = key_count + index;
+            let cursor = if state.detail_index() == detail_index {
+                ">"
+            } else {
+                " "
+            };
+            let active_model = active
+                .filter(|selection| {
+                    selection.provider_id == provider.id && selection.model_id == *model
+                })
+                .map(|_| "*")
+                .unwrap_or(" ");
+            lines.push(format!("{cursor}{active_model} {model}"));
+        }
+        for (index, model) in provider.manual_models.iter().enumerate() {
+            let detail_index = key_count + cached_models.len() + index;
+            let cursor = if state.detail_index() == detail_index {
+                ">"
+            } else {
+                " "
+            };
+            let active_model = active
+                .filter(|selection| {
+                    selection.provider_id == provider.id && selection.model_id == *model
+                })
+                .map(|_| "*")
+                .unwrap_or(" ");
+            lines.push(format!("{cursor}{active_model} {model} [manual]"));
+        }
+        if let Some(cache) = provider.models_cache.as_ref() {
             lines.push(format!("Cache refreshed: {}", cache.refreshed_at));
             if let Some(error) = &cache.last_error {
                 lines.push(format!("Last refresh error: {error}"));
             }
         }
-        _ => lines.push("  No cached models; press r to refresh.".into()),
     }
 
     lines.join("\n")
@@ -252,30 +274,27 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ApiKeyFormMode::Add => "Add API Key",
                 ApiKeyFormMode::Edit { .. } => "Edit API Key",
             };
-            let value = if form.current_field == 2 {
-                form.value.clone()
-            } else {
-                mask_secret(&form.value)
-            };
+            let value = form.value.clone();
             let mut lines = vec![
-                format!(
-                    "{} id: {}",
-                    field_cursor(form.current_field == 0),
-                    form.id.as_str()
-                ),
-                format!(
-                    "{} name: {}",
-                    field_cursor(form.current_field == 1),
-                    form.name.as_str()
-                ),
-                format!("{} value: {}", field_cursor(form.current_field == 2), value),
+                format!("{} value: {}", field_cursor(true), value),
                 String::new(),
-                "Tab/Shift+Tab switch field, Enter save, Esc cancel".into(),
+                "Enter save, Esc cancel".into(),
             ];
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
             }
             render_modal_text(frame, area, title, lines.join("\n"));
+        }
+        ModalState::ModelForm(form) => {
+            let mut lines = vec![
+                format!("{} model: {}", field_cursor(true), form.model.as_str()),
+                String::new(),
+                "Enter save, Esc cancel".into(),
+            ];
+            if let Some(error) = &form.validation_error {
+                lines.push(format!("Error: {error}"));
+            }
+            render_modal_text(frame, area, "Add Model", lines.join("\n"));
         }
         ModalState::ConfirmDeleteProvider { provider_id } => {
             render_modal_text(
