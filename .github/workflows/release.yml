@@ -74,3 +74,11 @@ jobs:
           files: |
             aikit-${{ matrix.target }}.${{ matrix.archive_ext }}
             aikit-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
+
+      - name: Upload installer scripts
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            scripts/install.sh
+            scripts/install.ps1

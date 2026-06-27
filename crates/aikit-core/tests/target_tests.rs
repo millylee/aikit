@@ -108,6 +108,73 @@ fn codex_writer_serializes_special_characters_in_toml() {
 }
 
 #[test]
+fn codex_writer_preserves_unrelated_existing_toml_keys() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        r#"
+model = "old-model"
+approval_policy = "on-request"
+
+[model_providers.other]
+name = "other"
+base_url = "https://other.example/v1"
+
+[profiles.default]
+model = "keep-me"
+"#,
+    )
+    .unwrap();
+
+    CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+        },
+    )
+    .unwrap();
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    let parsed: toml::Value = toml::from_str(&content).unwrap();
+
+    assert_eq!(
+        parsed.get("approval_policy").and_then(|v| v.as_str()),
+        Some("on-request")
+    );
+    assert_eq!(
+        parsed
+            .get("model_providers")
+            .and_then(|v| v.get("other"))
+            .and_then(|v| v.get("base_url"))
+            .and_then(|v| v.as_str()),
+        Some("https://other.example/v1")
+    );
+    assert_eq!(
+        parsed
+            .get("profiles")
+            .and_then(|v| v.get("default"))
+            .and_then(|v| v.get("model"))
+            .and_then(|v| v.as_str()),
+        Some("keep-me")
+    );
+    assert_eq!(
+        parsed.get("model").and_then(|v| v.as_str()),
+        Some("model-new")
+    );
+    assert_eq!(
+        parsed
+            .get("model_providers")
+            .and_then(|v| v.get("aikit"))
+            .and_then(|v| v.get("api_key"))
+            .and_then(|v| v.as_str()),
+        Some("sk-new")
+    );
+}
+
+#[test]
 fn claude_writer_creates_minimal_json_config() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");

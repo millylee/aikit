@@ -1,6 +1,7 @@
 use std::io::{self, stdout};
 
-use aikit_tui::app::AppState;
+use aikit_core::{config::default_config_path, provider::OpenAiCompatibleClient};
+use aikit_tui::app::{apply_active_selection, refresh_active_models, AppState};
 use aikit_tui::input::{handle_key, AppAction};
 use aikit_tui::ui;
 use color_eyre::Result;
@@ -32,18 +33,21 @@ impl Drop for TerminalGuard {
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
     let _guard = TerminalGuard::enter()?;
 
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    let mut state = AppState::default();
-    run_app(&mut terminal, &mut state)
+    let mut state = AppState::new(default_config_path()?);
+    let client = OpenAiCompatibleClient::new(reqwest::Client::new());
+    run_app(&mut terminal, &mut state, &client).await
 }
 
-fn run_app(
+async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     state: &mut AppState,
+    client: &OpenAiCompatibleClient,
 ) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, state))?;
@@ -54,8 +58,18 @@ fn run_app(
                     match handle_key(state, key) {
                         AppAction::None => {}
                         AppAction::Quit => break,
-                        AppAction::RefreshModels => state.set_status("Refresh requested"),
-                        AppAction::ApplySelection => state.set_status("Apply requested"),
+                        AppAction::RefreshModels => {
+                            match refresh_active_models(&state.config_path, client).await {
+                                Ok(outcome) => state.set_status(outcome.message),
+                                Err(err) => state.set_status(format!("Refresh failed: {err}")),
+                            }
+                        }
+                        AppAction::ApplySelection => {
+                            match apply_active_selection(&state.config_path) {
+                                Ok(outcome) => state.set_status(outcome.message),
+                                Err(err) => state.set_status(format!("Apply failed: {err}")),
+                            }
+                        }
                     }
                 }
             }

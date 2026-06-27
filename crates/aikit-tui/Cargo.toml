@@ -18,4 +18,9 @@ aikit-core = { path = "../aikit-core" }
 color-eyre.workspace = true
 crossterm.workspace = true
 ratatui.workspace = true
+reqwest.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+toml.workspace = true

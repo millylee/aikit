@@ -13,19 +13,27 @@ pub struct CodexWriter;
 
 impl CodexWriter {
     pub fn write_to_path(path: &Path, selection: &TargetSelection) -> Result<TargetWriteResult> {
-        if path.exists() {
+        let mut root = if path.exists() {
             let existing = fs::read_to_string(path)?;
-            toml::from_str::<toml::Value>(&existing).map_err(|err| {
+            match toml::from_str::<toml::Value>(&existing).map_err(|err| {
                 AikitError::TargetWrite(format!("invalid codex toml config: {err}"))
-            })?;
-        }
+            })? {
+                toml::Value::Table(table) => table,
+                _ => {
+                    return Err(AikitError::TargetWrite(
+                        "codex toml config must be a root table".into(),
+                    ))
+                }
+            }
+        } else {
+            toml::map::Map::new()
+        };
 
         let backup_path = backup_file(path)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        let mut root = toml::map::Map::new();
         root.insert("model".into(), toml::Value::String(selection.model.clone()));
         root.insert("model_provider".into(), toml::Value::String("aikit".into()));
 
@@ -40,7 +48,10 @@ impl CodexWriter {
             toml::Value::String(selection.api_key.clone()),
         );
 
-        let mut model_providers = toml::map::Map::new();
+        let mut model_providers = match root.remove("model_providers") {
+            Some(toml::Value::Table(table)) => table,
+            Some(_) | None => toml::map::Map::new(),
+        };
         model_providers.insert("aikit".into(), toml::Value::Table(provider));
         root.insert(
             "model_providers".into(),
