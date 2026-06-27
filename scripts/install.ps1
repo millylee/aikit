@@ -11,6 +11,25 @@ if ($Architecture -ne [System.Runtime.InteropServices.Architecture]::X64) {
 
 $Archive = "aikit-x86_64-pc-windows-msvc.zip"
 
+function Test-PathEntry {
+    param(
+        [string]$PathValue,
+        [string]$Entry
+    )
+
+    if (-not $PathValue) {
+        return $false
+    }
+
+    foreach ($PathEntry in ($PathValue -split [System.IO.Path]::PathSeparator)) {
+        if ([string]::Equals($PathEntry, $Entry, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 if ($Version -eq "latest") {
     $Url = "https://github.com/$Repo/releases/latest/download/$Archive"
 } else {
@@ -26,15 +45,27 @@ try {
 
     Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
 
-    New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+    $ResolvedBinDir = (New-Item -ItemType Directory -Path $BinDir -Force).FullName
+    $BinDir = $ResolvedBinDir
     $InstallPath = Join-Path $BinDir "aikit.exe"
     Copy-Item (Join-Path $TempDir "aikit.exe") $InstallPath -Force
 
     Write-Host "Installed aikit to $InstallPath"
 
-    $PathEntries = ($env:PATH -split [System.IO.Path]::PathSeparator) | Where-Object { $_ }
-    if ($PathEntries -notcontains $BinDir) {
-        Write-Host "Add $BinDir to your PATH to run aikit from any directory."
+    if (-not (Test-PathEntry -PathValue $env:PATH -Entry $BinDir)) {
+        $env:PATH = "$BinDir$([System.IO.Path]::PathSeparator)$env:PATH"
+        Write-Host "Added $BinDir to PATH for this PowerShell session."
+    }
+
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not (Test-PathEntry -PathValue $UserPath -Entry $BinDir)) {
+        $NewUserPath = if ($UserPath) {
+            "$UserPath$([System.IO.Path]::PathSeparator)$BinDir"
+        } else {
+            $BinDir
+        }
+        [Environment]::SetEnvironmentVariable("Path", $NewUserPath, "User")
+        Write-Host "Added $BinDir to your user PATH. Restart other terminals to pick it up."
     }
 } finally {
     Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue

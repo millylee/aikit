@@ -36,6 +36,12 @@ impl Drop for TerminalGuard {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+
+    if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
+        println!("aikit {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     let _guard = TerminalGuard::enter()?;
 
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;

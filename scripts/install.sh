@@ -5,6 +5,61 @@ REPO="${AIKIT_REPO:-millylee/aikit}"
 VERSION="${AIKIT_VERSION:-latest}"
 BIN_DIR="${AIKIT_BIN_DIR:-$HOME/.local/bin}"
 
+path_contains() {
+  local entry="$1"
+  case ":${PATH:-}:" in
+    *":${entry}:"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+profile_file() {
+  if [ -n "${AIKIT_SHELL_PROFILE:-}" ]; then
+    printf '%s\n' "$AIKIT_SHELL_PROFILE"
+    return
+  fi
+
+  case "${SHELL:-}" in
+    */zsh) printf '%s\n' "$HOME/.zshrc" ;;
+    */bash)
+      if [ "$(uname -s)" = "Darwin" ]; then
+        printf '%s\n' "$HOME/.bash_profile"
+      else
+        printf '%s\n' "$HOME/.bashrc"
+      fi
+      ;;
+    */fish) printf '%s\n' "$HOME/.config/fish/config.fish" ;;
+    *) printf '%s\n' "$HOME/.profile" ;;
+  esac
+}
+
+add_path_to_profile() {
+  local bin_dir="$1"
+  local profile="$2"
+
+  mkdir -p "$(dirname "$profile")"
+  touch "$profile"
+
+  if grep -F "$bin_dir" "$profile" >/dev/null 2>&1; then
+    return
+  fi
+
+  case "$profile" in
+    */config.fish)
+      {
+        printf '\n# aikit\n'
+        printf 'fish_add_path %s\n' "$bin_dir"
+      } >>"$profile"
+      ;;
+    *)
+      {
+        printf '\n# aikit\n'
+        printf 'export PATH="%s:$PATH"\n' "$bin_dir"
+      } >>"$profile"
+      ;;
+  esac
+}
+
 os="$(uname -s)"
 arch_name="$(uname -m)"
 
@@ -69,9 +124,13 @@ chmod +x "${BIN_DIR}/aikit"
 
 echo "Installed aikit to ${BIN_DIR}/aikit"
 
-case ":${PATH:-}:" in
-  *":${BIN_DIR}:"*) ;;
-  *)
-    echo "Add ${BIN_DIR} to your PATH to run aikit from any directory."
-    ;;
-esac
+if path_contains "$BIN_DIR"; then
+  exit 0
+fi
+
+shell_profile="$(profile_file)"
+add_path_to_profile "$BIN_DIR" "$shell_profile"
+
+echo "Added ${BIN_DIR} to PATH in ${shell_profile}."
+echo "Run this in the current terminal to use aikit immediately:"
+echo "  export PATH=\"${BIN_DIR}:\$PATH\""
