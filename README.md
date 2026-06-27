@@ -52,6 +52,13 @@ Default config location on all platforms:
 
 - `~/.aikit/config.toml`
 
+Runtime state is kept outside the main config:
+
+- `~/.aikit/state.toml`: import prompt state.
+- `~/.aikit/cache/models.json`: provider model cache.
+- `~/.aikit/backups/<target>/`: centralized backups for `aikit`, Claude Code, Gemini CLI, and Codex configs.
+- `~/.aikit/logs/backups.jsonl`: append-only backup index.
+
 Provider management keys in the main TUI:
 
 - `a`: add provider.

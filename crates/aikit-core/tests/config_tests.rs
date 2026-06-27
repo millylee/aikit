@@ -1,5 +1,6 @@
 use aikit_core::config::{
-    default_config_path, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
+    default_config_path, model_cache_path, state_path, AikitConfig, ApiKeyConfig,
+    ImportPromptState, ModelCache, ProviderConfig, TargetConfig,
 };
 use tempfile::tempdir;
 
@@ -26,7 +27,9 @@ fn saves_and_loads_config_as_toml() {
             }),
         }],
         active_selection: None,
-        import_prompt: Default::default(),
+        import_prompt: ImportPromptState {
+            skipped_fingerprint: Some("skip-me".into()),
+        },
         targets: vec![TargetConfig {
             id: "codex".into(),
             enabled: true,
@@ -35,11 +38,26 @@ fn saves_and_loads_config_as_toml() {
         backup_history: vec![],
     };
 
-    config.save_to(&path).unwrap();
-    let loaded = AikitConfig::load_from(&path).unwrap();
+    config.save_with_sidecars(&path).unwrap();
+    let config_content = std::fs::read_to_string(&path).unwrap();
+    assert!(!config_content.contains("models_cache"));
+    assert!(!config_content.contains("import_prompt"));
+    assert!(!config_content.contains("backup_history"));
+
+    assert!(state_path(&path).exists());
+    assert!(model_cache_path(&path).exists());
+    let loaded = AikitConfig::load_with_sidecars(&path).unwrap();
 
     assert_eq!(loaded.providers[0].id, "openrouter");
     assert_eq!(loaded.providers[0].api_keys[0].value, "sk-test");
+    assert_eq!(
+        loaded.providers[0].models_cache.as_ref().unwrap().models,
+        vec!["openai/gpt-4.1-mini"]
+    );
+    assert_eq!(
+        loaded.import_prompt.skipped_fingerprint.as_deref(),
+        Some("skip-me")
+    );
     assert_eq!(loaded.targets[0].id, "codex");
 }
 

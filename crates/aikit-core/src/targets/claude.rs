@@ -8,12 +8,31 @@ use serde_json::Value;
 
 use crate::{AikitError, Result};
 
-use super::{backup::backup_file, TargetSelection, TargetWriteResult, TargetWriter};
+use super::{
+    backup::{backup_file, backup_file_to_root},
+    TargetSelection, TargetWriteResult, TargetWriter,
+};
 
 pub struct ClaudeWriter;
 
 impl ClaudeWriter {
     pub fn write_to_path(path: &Path, selection: &TargetSelection) -> Result<TargetWriteResult> {
+        Self::write_to_path_inner(path, selection, None)
+    }
+
+    pub fn write_to_path_with_backup_root(
+        path: &Path,
+        selection: &TargetSelection,
+        backup_root: &Path,
+    ) -> Result<TargetWriteResult> {
+        Self::write_to_path_inner(path, selection, Some(backup_root))
+    }
+
+    fn write_to_path_inner(
+        path: &Path,
+        selection: &TargetSelection,
+        backup_root: Option<&Path>,
+    ) -> Result<TargetWriteResult> {
         let mut value = if path.exists() {
             let existing = fs::read_to_string(path)?;
             serde_json::from_str::<Value>(&existing).map_err(|err| {
@@ -28,7 +47,10 @@ impl ClaudeWriter {
             ));
         }
 
-        let backup_path = backup_file(path)?;
+        let backup_path = match backup_root {
+            Some(root) => backup_file_to_root("claude", path, root)?,
+            None => backup_file("claude", path)?,
+        };
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -36,12 +58,10 @@ impl ClaudeWriter {
         let object = value.as_object_mut().ok_or_else(|| {
             AikitError::TargetWrite("claude json config root must be an object".into())
         })?;
-        let env = object
-            .entry("env")
-            .or_insert_with(|| serde_json::json!({}));
-        let env_object = env.as_object_mut().ok_or_else(|| {
-            AikitError::TargetWrite("claude env config must be an object".into())
-        })?;
+        let env = object.entry("env").or_insert_with(|| serde_json::json!({}));
+        let env_object = env
+            .as_object_mut()
+            .ok_or_else(|| AikitError::TargetWrite("claude env config must be an object".into()))?;
         env_object.insert(
             "ANTHROPIC_AUTH_TOKEN".into(),
             Value::String(selection.api_key.clone()),

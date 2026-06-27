@@ -62,6 +62,8 @@ fn backup_config_file_copies_existing_file() {
 
     assert!(backup.exists());
     assert_eq!(std::fs::read_to_string(backup).unwrap(), "version = 1");
+    assert!(dir.path().join("backups").join("aikit").exists());
+    assert!(dir.path().join("logs").join("backups.jsonl").exists());
 }
 
 fn sample_config() -> AikitConfig {

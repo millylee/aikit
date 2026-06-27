@@ -8,12 +8,31 @@ use serde_json::Value;
 
 use crate::{AikitError, Result};
 
-use super::{backup::backup_file, TargetSelection, TargetWriteResult, TargetWriter};
+use super::{
+    backup::{backup_file, backup_file_to_root},
+    TargetSelection, TargetWriteResult, TargetWriter,
+};
 
 pub struct GeminiWriter;
 
 impl GeminiWriter {
     pub fn write_to_path(path: &Path, selection: &TargetSelection) -> Result<TargetWriteResult> {
+        Self::write_to_path_inner(path, selection, None)
+    }
+
+    pub fn write_to_path_with_backup_root(
+        path: &Path,
+        selection: &TargetSelection,
+        backup_root: &Path,
+    ) -> Result<TargetWriteResult> {
+        Self::write_to_path_inner(path, selection, Some(backup_root))
+    }
+
+    fn write_to_path_inner(
+        path: &Path,
+        selection: &TargetSelection,
+        backup_root: Option<&Path>,
+    ) -> Result<TargetWriteResult> {
         let mut value = if path.exists() {
             let existing = fs::read_to_string(path)?;
             serde_json::from_str::<Value>(&existing).map_err(|err| {
@@ -28,7 +47,10 @@ impl GeminiWriter {
             ));
         }
 
-        let backup_path = backup_file(path)?;
+        let backup_path = match backup_root {
+            Some(root) => backup_file_to_root("gemini", path, root)?,
+            None => backup_file("gemini", path)?,
+        };
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }

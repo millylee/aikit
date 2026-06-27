@@ -1,11 +1,9 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::path::{Path, PathBuf};
 
 use crate::{
+    config::aikit_dir_for_config,
     config::{AikitConfig, ApiKeyConfig, ProviderConfig},
+    targets::backup::backup_file_to_root,
     AikitError, Result,
 };
 
@@ -188,25 +186,7 @@ pub fn delete_api_key(config: &mut AikitConfig, provider_id: &str, key_id: &str)
 }
 
 pub fn backup_config_file(path: &Path) -> Result<Option<PathBuf>> {
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let timestamp_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| AikitError::Provider(format!("system time error: {err}")))?
-        .as_millis();
-
-    let backup_file_name = format!(
-        "{}.bak.{}",
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("config.toml"),
-        timestamp_ms
-    );
-    let backup_path = path.with_file_name(backup_file_name);
-    fs::copy(path, &backup_path)?;
-    Ok(Some(backup_path))
+    backup_file_to_root("aikit", path, &aikit_dir_for_config(path))
 }
 
 fn provider_mut<'a>(

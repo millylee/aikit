@@ -3,8 +3,8 @@ use std::path::Path;
 use aikit_core::{
     cache::refresh_models,
     config::{
-        default_config_path, ActiveSelection, AikitConfig, ApiKeyConfig, ProviderConfig,
-        TargetConfig,
+        aikit_dir_for_config, default_config_path, load_sidecars, save_state, ActiveSelection,
+        AikitConfig, AikitState, ApiKeyConfig, ProviderConfig, TargetConfig,
     },
     config_ops::{
         add_api_key, add_provider, backup_config_file, delete_api_key, delete_provider,
@@ -423,7 +423,7 @@ impl AppState {
         if persist_skip {
             let mut next_config = self.config.clone();
             next_config.import_prompt.skipped_fingerprint = Some(fingerprint);
-            self.persist_config_if_file_backed_config(&next_config)?;
+            self.persist_state_if_file_backed_config(&next_config)?;
             self.config = next_config;
         }
         self.modal_state = ModalState::None;
@@ -807,7 +807,7 @@ impl AppState {
             .map(|key| key.id.clone())
             .ok_or_else(|| AikitError::ConfigParse("no api key selected".into()))?;
 
-        self.config.save_to(&self.config_path)?;
+        self.persist_config_if_file_backed_config(&self.config)?;
         let outcome =
             refresh_selected_models(&self.config_path, &provider_id, &api_key_id, client).await?;
         self.load_config()?;
@@ -822,7 +822,7 @@ impl AppState {
             return Ok(outcome);
         }
 
-        self.config.save_to(&self.config_path)?;
+        self.persist_config_if_file_backed_config(&self.config)?;
         let outcome = apply_active_selection(&self.config_path)?;
         self.target_statuses = outcome.target_statuses.clone();
         self.set_status(outcome.message.clone());
@@ -831,9 +831,7 @@ impl AppState {
 
     pub fn detail_item_count(&self) -> usize {
         self.selected_provider()
-            .map(|provider| {
-                provider.api_keys.len() + provider_model_count(provider)
-            })
+            .map(|provider| provider.api_keys.len() + provider_model_count(provider))
             .unwrap_or(0)
     }
 
@@ -1049,7 +1047,9 @@ impl AppState {
                             .iter()
                             .find(|key| key.id == original_id.as_str())
                     })
-                    .ok_or_else(|| AikitError::Provider(format!("api key not found: {original_id}")))?;
+                    .ok_or_else(|| {
+                        AikitError::Provider(format!("api key not found: {original_id}"))
+                    })?;
                 (key.id.clone(), key.name.clone())
             }
         };
@@ -1115,7 +1115,9 @@ impl AppState {
             .providers
             .iter_mut()
             .find(|provider| provider.id == form.provider_id)
-            .ok_or_else(|| AikitError::Provider(format!("provider not found: {}", form.provider_id)))?;
+            .ok_or_else(|| {
+                AikitError::Provider(format!("provider not found: {}", form.provider_id))
+            })?;
         let already_cached = provider
             .models_cache
             .as_ref()
@@ -1211,7 +1213,29 @@ impl AppState {
         if is_single_segment_relative {
             return config.save_to(&std::path::PathBuf::from(".").join(&self.config_path));
         }
-        config.save_to(&self.config_path)
+        config.save_with_sidecars(&self.config_path)
+    }
+
+    fn persist_state_if_file_backed_config(&self, config: &AikitConfig) -> Result<()> {
+        let is_single_segment_relative = self.config_path.is_relative()
+            && self
+                .config_path
+                .parent()
+                .is_none_or(|parent| parent.as_os_str().is_empty());
+        if is_single_segment_relative {
+            return Ok(());
+        }
+        let config_path = if is_single_segment_relative {
+            std::path::PathBuf::from(".").join(&self.config_path)
+        } else {
+            self.config_path.clone()
+        };
+        save_state(
+            &config_path,
+            &AikitState {
+                import_prompt: config.import_prompt.clone(),
+            },
+        )
     }
 }
 
@@ -1336,7 +1360,7 @@ pub async fn refresh_selected_models(
         .as_ref()
         .map(|cache| cache.models.len())
         .unwrap_or(0);
-    config.save_to(config_path)?;
+    config.save_with_sidecars(config_path)?;
 
     result.map(|_| AppCommandOutcome::success(format!("Refreshed {count} model(s)"), count, 0))
 }
@@ -1349,7 +1373,7 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
     let mut target_statuses = Vec::new();
 
     for target in config.targets.iter().filter(|target| target.enabled) {
-        match write_target(target, &selection) {
+        match write_target(target, &selection, &aikit_dir_for_config(config_path)) {
             Ok(_) => {
                 succeeded += 1;
                 target_statuses.push(TargetStatus {
@@ -1367,7 +1391,7 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
         }
     }
 
-    config.save_to(config_path)?;
+    config.save_with_sidecars(config_path)?;
     let mut outcome = AppCommandOutcome::success(
         format!("Applied {succeeded} target(s), {failed} failed"),
         succeeded,
@@ -1379,9 +1403,11 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
 
 fn load_or_default(config_path: &Path) -> Result<AikitConfig> {
     if config_path.exists() {
-        AikitConfig::load_from(config_path)
+        AikitConfig::load_with_sidecars(config_path)
     } else {
-        Ok(AikitConfig::default())
+        let mut config = AikitConfig::default();
+        load_sidecars(config_path, &mut config)?;
+        Ok(config)
     }
 }
 
@@ -1444,20 +1470,36 @@ fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
     }
 }
 
-fn write_target(target: &TargetConfig, selection: &TargetSelection) -> Result<TargetWriteResult> {
+fn write_target(
+    target: &TargetConfig,
+    selection: &TargetSelection,
+    backup_root: &Path,
+) -> Result<TargetWriteResult> {
     match target.id.as_str() {
-        "claude" => match target.config_path.as_deref() {
-            Some(path) => ClaudeWriter::write_to_path(path, selection),
-            None => ClaudeWriter.write(selection),
-        },
-        "gemini" => match target.config_path.as_deref() {
-            Some(path) => GeminiWriter::write_to_path(path, selection),
-            None => GeminiWriter.write(selection),
-        },
-        "codex" => match target.config_path.as_deref() {
-            Some(path) => CodexWriter::write_to_path(path, selection),
-            None => CodexWriter.write(selection),
-        },
+        "claude" => {
+            let path = target
+                .config_path
+                .clone()
+                .map(Ok)
+                .unwrap_or_else(|| ClaudeWriter.default_path())?;
+            ClaudeWriter::write_to_path_with_backup_root(&path, selection, backup_root)
+        }
+        "gemini" => {
+            let path = target
+                .config_path
+                .clone()
+                .map(Ok)
+                .unwrap_or_else(|| GeminiWriter.default_path())?;
+            GeminiWriter::write_to_path_with_backup_root(&path, selection, backup_root)
+        }
+        "codex" => {
+            let path = target
+                .config_path
+                .clone()
+                .map(Ok)
+                .unwrap_or_else(|| CodexWriter.default_path())?;
+            CodexWriter::write_to_path_with_backup_root(&path, selection, backup_root)
+        }
         other => Err(AikitError::TargetWrite(format!(
             "unknown target writer: {other}"
         ))),

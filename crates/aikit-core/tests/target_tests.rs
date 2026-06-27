@@ -8,19 +8,24 @@ use tempfile::tempdir;
 fn codex_writer_creates_backup_before_writing_existing_config() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("config.toml");
+    let backup_root = dir.path().join("aikit");
     std::fs::write(&path, "model = \"old\"\n").unwrap();
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
         },
+        &backup_root,
     )
     .unwrap();
 
-    assert!(result.backup_path.unwrap().exists());
+    let backup_path = result.backup_path.unwrap();
+    assert!(backup_path.exists());
+    assert!(backup_path.starts_with(backup_root.join("backups").join("codex")));
+    assert!(backup_root.join("logs").join("backups.jsonl").exists());
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
     assert!(updated.contains("https://example.com/v1"));
@@ -128,13 +133,14 @@ model = "keep-me"
     )
     .unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
         },
+        &dir.path().join("aikit"),
     )
     .unwrap();
 
@@ -255,13 +261,15 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
     )
     .unwrap();
 
-    let result = ClaudeWriter::write_to_path(
+    let backup_root = dir.path().join("aikit");
+    let result = ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "claude-model".into(),
         },
+        &backup_root,
     )
     .unwrap();
 
@@ -302,13 +310,15 @@ fn gemini_writer_preserves_existing_json_and_creates_backup() {
     let path = dir.path().join("settings.json");
     std::fs::write(&path, r#"{"existing": true}"#).unwrap();
 
-    let result = GeminiWriter::write_to_path(
+    let backup_root = dir.path().join("aikit");
+    let result = GeminiWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "gemini-model".into(),
         },
+        &backup_root,
     )
     .unwrap();
 

@@ -66,7 +66,9 @@ fn load_config_populates_visible_provider_key_model_and_target_state() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
     let codex_path = dir.path().join("codex").join("config.toml");
-    sample_config(codex_path).save_to(&config_path).unwrap();
+    sample_config(codex_path)
+        .save_with_sidecars(&config_path)
+        .unwrap();
 
     let mut state = AppState::new(config_path);
     state.load_config().unwrap();
@@ -266,7 +268,7 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
         enabled: false,
         config_path: Some(gemini_path.clone()),
     });
-    config.save_to(&config_path).unwrap();
+    config.save_with_sidecars(&config_path).unwrap();
 
     let outcome = apply_active_selection(&config_path).unwrap();
 
@@ -303,7 +305,7 @@ fn apply_active_selection_without_api_key_reports_actionable_message() {
         }],
         ..AikitConfig::default()
     };
-    config.save_to(&config_path).unwrap();
+    config.save_with_sidecars(&config_path).unwrap();
     let mut state = AppState::new(config_path);
     state.load_config().unwrap();
 
@@ -334,7 +336,7 @@ async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() 
     config.providers[0].base_url = format!("{}/v1", server.uri());
     config.providers[0].models_cache = None;
     config.active_selection = None;
-    config.save_to(&config_path).unwrap();
+    config.save_with_sidecars(&config_path).unwrap();
 
     let client = aikit_core::provider::OpenAiCompatibleClient::new(reqwest::Client::new());
     let mut state = AppState::new(config_path.clone());
@@ -344,7 +346,7 @@ async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() 
 
     assert_eq!(outcome.succeeded, 1);
     assert_eq!(state.selected_model(), Some("model-new"));
-    let saved = AikitConfig::load_from(&config_path).unwrap();
+    let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert_eq!(
         saved.providers[0]
             .models_cache
@@ -534,7 +536,9 @@ fn modal_ignores_ctrl_char_input() {
 fn manual_import_prompt_skip_does_not_store_fingerprint() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
-    AikitConfig::default().save_to(&config_path).unwrap();
+    AikitConfig::default()
+        .save_with_sidecars(&config_path)
+        .unwrap();
     let mut state = AppState::new(config_path.clone());
     state.load_config().unwrap();
 
@@ -551,7 +555,7 @@ fn manual_import_prompt_skip_does_not_store_fingerprint() {
     state.open_import_prompt().unwrap();
     state.skip_import_prompt().unwrap();
 
-    let saved = AikitConfig::load_from(&config_path).unwrap();
+    let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert!(saved.providers.is_empty());
     assert!(saved.import_prompt.skipped_fingerprint.is_none());
 }
@@ -560,7 +564,9 @@ fn manual_import_prompt_skip_does_not_store_fingerprint() {
 fn startup_import_prompt_skip_stores_fingerprint_without_writing_provider() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
-    AikitConfig::default().save_to(&config_path).unwrap();
+    AikitConfig::default()
+        .save_with_sidecars(&config_path)
+        .unwrap();
     let mut state = AppState::new(config_path.clone());
     state.load_config().unwrap();
 
@@ -580,7 +586,7 @@ fn startup_import_prompt_skip_stores_fingerprint_without_writing_provider() {
     state.open_startup_import_prompt_from_plan(plan).unwrap();
     state.skip_import_prompt().unwrap();
 
-    let saved = AikitConfig::load_from(&config_path).unwrap();
+    let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert!(saved.providers.is_empty());
     assert!(saved.import_prompt.skipped_fingerprint.is_some());
 }
@@ -589,7 +595,9 @@ fn startup_import_prompt_skip_stores_fingerprint_without_writing_provider() {
 fn import_prompt_confirm_writes_provider() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
-    AikitConfig::default().save_to(&config_path).unwrap();
+    AikitConfig::default()
+        .save_with_sidecars(&config_path)
+        .unwrap();
     let mut state = AppState::new(config_path.clone());
     state.load_config().unwrap();
 
@@ -606,7 +614,7 @@ fn import_prompt_confirm_writes_provider() {
     state.open_import_prompt().unwrap();
     state.confirm_import_all().unwrap();
 
-    let saved = AikitConfig::load_from(&config_path).unwrap();
+    let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert_eq!(saved.providers.len(), 1);
     assert_eq!(saved.providers[0].api_keys[0].value, "sk-test");
 }
