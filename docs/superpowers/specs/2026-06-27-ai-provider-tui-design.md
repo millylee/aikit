@@ -69,7 +69,7 @@ Suggested key bindings:
 
 ## Local Configuration
 
-Store user configuration as TOML under the platform's standard user config directory. The default file is `aikit/config.toml` under that directory. The first version uses a local file with plain API keys and best-effort owner-only permissions.
+Store user configuration as TOML at `~/.aikit/config.toml` on all platforms. The first version uses a local file with plain API keys and best-effort owner-only permissions.
 
 The configuration contains:
 

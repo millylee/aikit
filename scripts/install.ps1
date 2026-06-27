@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $Repo = if ($env:AIKIT_REPO) { $env:AIKIT_REPO } else { "millylee/aikit" }
 $Version = if ($env:AIKIT_VERSION) { $env:AIKIT_VERSION } else { "latest" }
-$BinDir = if ($env:AIKIT_BIN_DIR) { $env:AIKIT_BIN_DIR } else { Join-Path $HOME ".aikit\bin" }
+$BinDir = if ($env:AIKIT_BIN_DIR) { $env:AIKIT_BIN_DIR } else { Join-Path $HOME ".local\bin" }
 
 $Architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
 if ($Architecture -ne [System.Runtime.InteropServices.Architecture]::X64) {

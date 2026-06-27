@@ -42,15 +42,15 @@ aikit --version
 
 If the installer just added aikit to your PATH, restart the terminal or run the PATH command printed by the installer before using `aikit`.
 
+Installers place the `aikit` binary in `~/.local/bin` by default. Set `AIKIT_BIN_DIR` before running an installer to choose another directory.
+
 ### Manage Providers and Keys
 
-The TUI manages providers and API keys directly in `aikit/config.toml` under your user config directory.
+The TUI manages providers and API keys directly in `~/.aikit/config.toml`.
 
-Common config locations:
+Default config location on all platforms:
 
-- Windows: `%APPDATA%\aikit\config.toml`
-- macOS: `~/Library/Application Support/aikit/config.toml`
-- Linux: `~/.config/aikit/config.toml`
+- `~/.aikit/config.toml`
 
 Provider management keys in the main TUI:
 

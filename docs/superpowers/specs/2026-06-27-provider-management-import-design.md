@@ -81,11 +81,11 @@ Secrets are present in memory for import and persistence, but TUI display must m
 
 Startup flow:
 
-1. Load `aikit/config.toml`.
+1. Load `~/.aikit/config.toml`.
 2. If the config has no providers, scan import sources.
 3. If candidates exist, show an import prompt before modifying config.
 4. Let the user import all, skip, or open a selectable candidate list.
-5. Before applying imports, create a backup of `aikit/config.toml` if it exists.
+5. Before applying imports, create a backup of `~/.aikit/config.toml` if it exists.
 6. Apply selected candidates, save config, and refresh TUI state.
 
 Manual flow:
@@ -159,7 +159,7 @@ API key values are masked when displayed outside edit mode.
 Before deleting a provider or API key:
 
 1. Show a confirmation dialog.
-2. Backup `aikit/config.toml` if it exists.
+2. Backup `~/.aikit/config.toml` if it exists.
 3. Apply the deletion.
 4. Save config.
 5. Refresh TUI state.

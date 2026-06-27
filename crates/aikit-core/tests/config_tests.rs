@@ -45,5 +45,5 @@ fn saves_and_loads_config_as_toml() {
 #[test]
 fn default_path_ends_with_aikit_config_toml() {
     let path = default_config_path().unwrap();
-    assert!(path.ends_with("aikit/config.toml") || path.ends_with("aikit\\config.toml"));
+    assert!(path.ends_with(".aikit/config.toml") || path.ends_with(".aikit\\config.toml"));
 }

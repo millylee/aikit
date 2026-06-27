@@ -118,7 +118,7 @@ impl AikitConfig {
 pub fn default_config_path() -> Result<PathBuf> {
     let dirs = BaseDirs::new()
         .ok_or_else(|| AikitError::ConfigParse("could not determine config directory".into()))?;
-    Ok(dirs.config_dir().join("aikit").join("config.toml"))
+    Ok(dirs.home_dir().join(".aikit").join("config.toml"))
 }
 
 #[cfg(unix)]
