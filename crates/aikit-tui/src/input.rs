@@ -43,7 +43,9 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                 AppAction::None
             }
             KeyCode::Char(ch) => {
-                if !ch.is_control() {
+                if matches!(key.modifiers, KeyModifiers::NONE | KeyModifiers::SHIFT)
+                    && !ch.is_control()
+                {
                     if let Err(err) = state.modal_append_char(ch) {
                         state.set_status(format!("Modal edit failed: {err}"));
                     }
@@ -62,7 +64,11 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
         }
         (KeyCode::Char('e'), _) => {
             let result = if state.focused_pane == FocusedPane::Details {
-                state.open_edit_api_key_modal()
+                if state.details_selection_is_api_key() {
+                    state.open_edit_api_key_modal()
+                } else {
+                    Ok(())
+                }
             } else {
                 state.open_edit_provider_modal()
             };
@@ -84,7 +90,14 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('x'), _) => {
-            if let Err(err) = state.open_delete_api_key_confirmation() {
+            let result = if state.focused_pane == FocusedPane::Details
+                && !state.details_selection_is_api_key()
+            {
+                Ok(())
+            } else {
+                state.open_delete_api_key_confirmation()
+            };
+            if let Err(err) = result {
                 state.set_status(format!("Open modal failed: {err}"));
             }
             AppAction::None

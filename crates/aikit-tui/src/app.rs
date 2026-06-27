@@ -565,6 +565,12 @@ impl AppState {
         self.detail_index
     }
 
+    pub fn details_selection_is_api_key(&self) -> bool {
+        self.selected_provider()
+            .map(|provider| self.detail_index < provider.api_keys.len())
+            .unwrap_or(false)
+    }
+
     fn normalize_selection_indices(&mut self) {
         self.provider_index = self
             .provider_index
@@ -802,15 +808,20 @@ impl AppState {
     }
 
     fn persist_config_if_file_backed(&self) -> Result<()> {
-        // Unit tests may use a dummy relative filename like "config.toml" with no
-        // meaningful parent directory; skip filesystem writes in that case only.
-        if self.config_path.is_relative()
+        // Unit tests may use a dummy single-segment relative path like "config.toml".
+        // Skip only when that relative file does not exist yet.
+        let is_single_segment_relative = self.config_path.is_relative()
             && self
                 .config_path
                 .parent()
-                .is_none_or(|parent| parent.as_os_str().is_empty())
-        {
+                .is_none_or(|parent| parent.as_os_str().is_empty());
+        if is_single_segment_relative && !self.config_path.exists() {
             return Ok(());
+        }
+        if is_single_segment_relative {
+            return self
+                .config
+                .save_to(&std::path::PathBuf::from(".").join(&self.config_path));
         }
         self.config.save_to(&self.config_path)
     }

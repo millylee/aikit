@@ -2,7 +2,7 @@ use aikit_core::config::{
     ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
 };
 use aikit_tui::{
-    app::{active_target_selection, apply_active_selection, AppState, FocusedPane},
+    app::{active_target_selection, apply_active_selection, AppState, FocusedPane, ModalState},
     input::{handle_key, AppAction},
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -270,6 +270,73 @@ fn delete_provider_confirmation_clears_provider() {
     state.confirm_modal().unwrap();
 
     assert!(state.config.providers.is_empty());
+}
+
+#[test]
+fn provider_modal_save_persists_existing_single_segment_relative_config() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    let original_name = state.config.providers[0].name.clone();
+    let unique_suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let relative_path = std::path::PathBuf::from(format!("task4-modal-{unique_suffix}.toml"));
+    state.config_path = relative_path.clone();
+    state.config.save_to(&relative_path).unwrap();
+
+    state.open_edit_provider_modal().unwrap();
+    state
+        .set_modal_field("name", "Provider Persisted Update")
+        .unwrap();
+    state.save_modal().unwrap();
+
+    let saved = AikitConfig::load_from(&relative_path).unwrap();
+    assert_eq!(saved.providers[0].name, "Provider Persisted Update");
+    assert_ne!(saved.providers[0].name, original_name);
+    std::fs::remove_file(relative_path).unwrap();
+}
+
+#[test]
+fn x_on_model_row_does_not_open_api_key_delete_confirmation() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Details;
+    state.select_next();
+    let original_key_count = state.config.providers[0].api_keys.len();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert_eq!(state.modal_state, ModalState::None);
+    assert_eq!(state.config.providers[0].api_keys.len(), original_key_count);
+}
+
+#[test]
+fn modal_ignores_ctrl_char_input() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig::default(),
+    );
+    state.open_add_provider_modal();
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
+    );
+    state.modal_append_char('b').unwrap();
+
+    let ModalState::ProviderForm(form) = &state.modal_state else {
+        panic!("provider modal should stay open");
+    };
+    assert_eq!(form.id, "b");
 }
 
 fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
