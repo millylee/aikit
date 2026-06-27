@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use directories::ProjectDirs;
+use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 
 use crate::{AikitError, Result};
@@ -108,9 +108,9 @@ impl AikitConfig {
 }
 
 pub fn default_config_path() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("", "", "aikit")
+    let dirs = BaseDirs::new()
         .ok_or_else(|| AikitError::ConfigParse("could not determine config directory".into()))?;
-    Ok(dirs.config_dir().join("config.toml"))
+    Ok(dirs.config_dir().join("aikit").join("config.toml"))
 }
 
 #[cfg(unix)]
