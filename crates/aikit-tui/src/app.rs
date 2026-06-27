@@ -68,6 +68,7 @@ pub enum ModalState {
         fingerprint: String,
         selected_indices: Vec<bool>,
         warnings: Vec<String>,
+        persist_skip: bool,
     },
     ImportList {
         candidates: Vec<ImportCandidate>,
@@ -75,6 +76,7 @@ pub enum ModalState {
         selected_indices: Vec<bool>,
         cursor: usize,
         warnings: Vec<String>,
+        persist_skip: bool,
     },
 }
 
@@ -307,6 +309,18 @@ impl AppState {
     }
 
     pub fn open_import_prompt_from_plan(&mut self, plan: ImportPlan) -> Result<()> {
+        self.open_import_prompt_from_plan_with_skip(plan, false)
+    }
+
+    pub fn open_startup_import_prompt_from_plan(&mut self, plan: ImportPlan) -> Result<()> {
+        self.open_import_prompt_from_plan_with_skip(plan, true)
+    }
+
+    fn open_import_prompt_from_plan_with_skip(
+        &mut self,
+        plan: ImportPlan,
+        persist_skip: bool,
+    ) -> Result<()> {
         if plan.candidates.is_empty() {
             self.set_status("No import candidates found");
             return Ok(());
@@ -317,6 +331,7 @@ impl AppState {
             candidates: plan.candidates,
             fingerprint,
             warnings: plan.warnings,
+            persist_skip,
         };
         Ok(())
     }
@@ -327,6 +342,7 @@ impl AppState {
             fingerprint,
             selected_indices,
             warnings,
+            persist_skip,
         } = self.modal_state.clone()
         {
             self.modal_state = ModalState::ImportList {
@@ -335,6 +351,7 @@ impl AppState {
                 selected_indices,
                 cursor: 0,
                 warnings,
+                persist_skip,
             };
             return Ok(());
         }
@@ -365,17 +382,29 @@ impl AppState {
     }
 
     pub fn skip_import_prompt(&mut self) -> Result<()> {
-        let fingerprint = match self.modal_state.clone() {
-            ModalState::ImportPrompt { fingerprint, .. }
-            | ModalState::ImportList { fingerprint, .. } => fingerprint,
+        let (fingerprint, persist_skip) = match self.modal_state.clone() {
+            ModalState::ImportPrompt {
+                fingerprint,
+                persist_skip,
+                ..
+            }
+            | ModalState::ImportList {
+                fingerprint,
+                persist_skip,
+                ..
+            } => (fingerprint, persist_skip),
             _ => {
                 return Err(AikitError::Provider(
                     "import prompt is not open, cannot skip import".into(),
                 ))
             }
         };
-        self.config.import_prompt.skipped_fingerprint = Some(fingerprint);
-        self.persist_config_if_file_backed()?;
+        if persist_skip {
+            let mut next_config = self.config.clone();
+            next_config.import_prompt.skipped_fingerprint = Some(fingerprint);
+            self.persist_config_if_file_backed_config(&next_config)?;
+            self.config = next_config;
+        }
         self.modal_state = ModalState::None;
         self.set_status("Skipped import prompt");
         Ok(())
@@ -422,6 +451,7 @@ impl AppState {
             fingerprint,
             selected_indices,
             warnings,
+            persist_skip,
             ..
         } = self.modal_state.clone()
         {
@@ -430,6 +460,7 @@ impl AppState {
                 fingerprint,
                 selected_indices,
                 warnings,
+                persist_skip,
             };
             return Ok(());
         }
@@ -442,6 +473,7 @@ impl AppState {
                 candidates,
                 selected_indices,
                 fingerprint,
+                persist_skip: _,
                 ..
             } => (candidates, selected_indices, fingerprint),
             _ => {
@@ -610,8 +642,10 @@ impl AppState {
         match self.modal_state.clone() {
             ModalState::ConfirmDeleteProvider { provider_id } => {
                 let _ = backup_config_file(&self.config_path)?;
-                delete_provider(&mut self.config, &provider_id)?;
-                self.persist_config_if_file_backed()?;
+                let mut next_config = self.config.clone();
+                delete_provider(&mut next_config, &provider_id)?;
+                self.persist_config_if_file_backed_config(&next_config)?;
+                self.config = next_config;
                 self.normalize_selection_indices();
                 self.modal_state = ModalState::None;
                 self.set_status(format!("Deleted provider {provider_id}"));
@@ -622,8 +656,10 @@ impl AppState {
                 api_key_id,
             } => {
                 let _ = backup_config_file(&self.config_path)?;
-                delete_api_key(&mut self.config, &provider_id, &api_key_id)?;
-                self.persist_config_if_file_backed()?;
+                let mut next_config = self.config.clone();
+                delete_api_key(&mut next_config, &provider_id, &api_key_id)?;
+                self.persist_config_if_file_backed_config(&next_config)?;
+                self.config = next_config;
                 self.normalize_selection_indices();
                 self.modal_state = ModalState::None;
                 self.set_status(format!("Deleted API key {api_key_id}"));
@@ -918,9 +954,10 @@ impl AppState {
             self.set_provider_modal_error(err.to_string());
         })?;
         let provider_id = form.id.clone();
+        let mut next_config = self.config.clone();
         let op_result = match &form.mode {
             ProviderFormMode::Add => add_provider(
-                &mut self.config,
+                &mut next_config,
                 ProviderForm {
                     id: form.id,
                     name: form.name,
@@ -929,7 +966,7 @@ impl AppState {
                 },
             ),
             ProviderFormMode::Edit { original_id } => update_provider(
-                &mut self.config,
+                &mut next_config,
                 original_id,
                 ProviderForm {
                     id: form.id,
@@ -945,7 +982,8 @@ impl AppState {
             return Err(err);
         }
 
-        self.persist_config_if_file_backed()?;
+        self.persist_config_if_file_backed_config(&next_config)?;
+        self.config = next_config;
         if let Some(index) = self
             .config
             .providers
@@ -962,9 +1000,10 @@ impl AppState {
 
     fn save_api_key_form(&mut self, form: ApiKeyFormState) -> Result<()> {
         let key_id = form.id.clone();
+        let mut next_config = self.config.clone();
         let op_result = match &form.mode {
             ApiKeyFormMode::Add => add_api_key(
-                &mut self.config,
+                &mut next_config,
                 &form.provider_id,
                 ApiKeyForm {
                     id: form.id,
@@ -973,7 +1012,7 @@ impl AppState {
                 },
             ),
             ApiKeyFormMode::Edit { original_id } => update_api_key(
-                &mut self.config,
+                &mut next_config,
                 &form.provider_id,
                 original_id,
                 ApiKeyForm {
@@ -989,7 +1028,8 @@ impl AppState {
             return Err(err);
         }
 
-        self.persist_config_if_file_backed()?;
+        self.persist_config_if_file_backed_config(&next_config)?;
+        self.config = next_config;
         if let Some(provider_index) = self
             .config
             .providers
@@ -1029,18 +1069,19 @@ impl AppState {
         if self.config_path.exists() {
             let _ = backup_config_file(&self.config_path)?;
         }
-        let result = apply_import_candidates(&mut self.config, &selected);
-        if self
-            .config
+        let mut next_config = self.config.clone();
+        let result = apply_import_candidates(&mut next_config, &selected);
+        if next_config
             .import_prompt
             .skipped_fingerprint
             .as_ref()
             .zip(imported_fingerprint.as_ref())
             .is_some_and(|(skipped, imported)| skipped == imported)
         {
-            self.config.import_prompt.skipped_fingerprint = None;
+            next_config.import_prompt.skipped_fingerprint = None;
         }
-        self.persist_config_if_file_backed()?;
+        self.persist_config_if_file_backed_config(&next_config)?;
+        self.config = next_config;
         self.normalize_selection_indices();
         self.modal_state = ModalState::None;
         self.set_status(format!(
@@ -1052,7 +1093,7 @@ impl AppState {
         Ok(())
     }
 
-    fn persist_config_if_file_backed(&self) -> Result<()> {
+    fn persist_config_if_file_backed_config(&self, config: &AikitConfig) -> Result<()> {
         // Unit tests may use a dummy single-segment relative path like "config.toml".
         // Skip only when that relative file does not exist yet.
         let is_single_segment_relative = self.config_path.is_relative()
@@ -1064,11 +1105,9 @@ impl AppState {
             return Ok(());
         }
         if is_single_segment_relative {
-            return self
-                .config
-                .save_to(&std::path::PathBuf::from(".").join(&self.config_path));
+            return config.save_to(&std::path::PathBuf::from(".").join(&self.config_path));
         }
-        self.config.save_to(&self.config_path)
+        config.save_to(&self.config_path)
     }
 }
 

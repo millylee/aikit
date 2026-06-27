@@ -149,3 +149,28 @@ fn merge_preserves_existing_name_enabled_and_model_cache() {
     );
     assert_eq!(config.providers[0].api_keys.len(), 2);
 }
+
+#[test]
+fn merge_skips_new_provider_without_base_url() {
+    let mut config = AikitConfig::default();
+
+    let result = apply_import_candidates(
+        &mut config,
+        &[ImportCandidate {
+            source: ImportSource::Env,
+            provider_id: "openai".into(),
+            provider_name: "OpenAI".into(),
+            base_url: None,
+            api_key_name: Some("OPENAI_API_KEY".into()),
+            api_key_value: Some("sk-imported".into()),
+            model: Some("gpt-4.1-mini".into()),
+            warnings: vec![],
+        }],
+    );
+
+    assert!(config.providers.is_empty());
+    assert_eq!(result.added_providers, 0);
+    assert_eq!(result.added_keys, 0);
+    assert_eq!(result.warnings.len(), 1);
+    assert!(result.warnings[0].contains("base URL"));
+}

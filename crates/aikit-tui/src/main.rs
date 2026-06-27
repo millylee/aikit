@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
             let fingerprint = candidate_fingerprint(&plan.candidates);
             let skipped = state.config.import_prompt.skipped_fingerprint.as_deref();
             if skipped != Some(fingerprint.as_str()) {
-                state.open_import_prompt_from_plan(plan)?;
+                state.open_startup_import_prompt_from_plan(plan)?;
             }
         }
     }

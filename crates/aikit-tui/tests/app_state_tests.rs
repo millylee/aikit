@@ -300,6 +300,37 @@ fn provider_modal_save_persists_existing_single_segment_relative_config() {
 }
 
 #[test]
+fn provider_modal_save_failure_keeps_config_unchanged() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::create_dir(&config_path).unwrap();
+    let original = sample_config(dir.path().join("codex").join("config.toml"));
+    let mut state = AppState::from_config(config_path, original.clone());
+
+    state.open_edit_provider_modal().unwrap();
+    state.set_modal_field("name", "Should Not Persist").unwrap();
+    let result = state.save_modal();
+
+    assert!(result.is_err());
+    assert_eq!(state.config, original);
+}
+
+#[test]
+fn delete_provider_save_failure_keeps_config_unchanged() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::create_dir(&config_path).unwrap();
+    let original = sample_config(dir.path().join("codex").join("config.toml"));
+    let mut state = AppState::from_config(config_path, original.clone());
+
+    state.open_delete_provider_confirmation().unwrap();
+    let result = state.confirm_modal();
+
+    assert!(result.is_err());
+    assert_eq!(state.config, original);
+}
+
+#[test]
 fn x_on_model_row_does_not_open_api_key_delete_confirmation() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
@@ -340,7 +371,7 @@ fn modal_ignores_ctrl_char_input() {
 }
 
 #[test]
-fn import_prompt_skip_stores_fingerprint_without_writing_provider() {
+fn manual_import_prompt_skip_does_not_store_fingerprint() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
     AikitConfig::default().save_to(&config_path).unwrap();
@@ -358,6 +389,35 @@ fn import_prompt_skip_stores_fingerprint_without_writing_provider() {
         warnings: vec![],
     }]);
     state.open_import_prompt().unwrap();
+    state.skip_import_prompt().unwrap();
+
+    let saved = AikitConfig::load_from(&config_path).unwrap();
+    assert!(saved.providers.is_empty());
+    assert!(saved.import_prompt.skipped_fingerprint.is_none());
+}
+
+#[test]
+fn startup_import_prompt_skip_stores_fingerprint_without_writing_provider() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    AikitConfig::default().save_to(&config_path).unwrap();
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+
+    let plan = aikit_core::import::ImportPlan {
+        candidates: vec![aikit_core::import::ImportCandidate {
+            source: aikit_core::import::ImportSource::Env,
+            provider_id: "openai".into(),
+            provider_name: "OpenAI".into(),
+            base_url: Some("https://api.openai.com/v1".into()),
+            api_key_name: Some("OPENAI_API_KEY".into()),
+            api_key_value: Some("sk-test".into()),
+            model: Some("gpt-4.1-mini".into()),
+            warnings: vec![],
+        }],
+        warnings: vec![],
+    };
+    state.open_startup_import_prompt_from_plan(plan).unwrap();
     state.skip_import_prompt().unwrap();
 
     let saved = AikitConfig::load_from(&config_path).unwrap();
@@ -389,6 +449,31 @@ fn import_prompt_confirm_writes_provider() {
     let saved = AikitConfig::load_from(&config_path).unwrap();
     assert_eq!(saved.providers.len(), 1);
     assert_eq!(saved.providers[0].api_keys[0].value, "sk-test");
+}
+
+#[test]
+fn import_apply_save_failure_keeps_config_unchanged() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::create_dir(&config_path).unwrap();
+    let original = AikitConfig::default();
+    let mut state = AppState::from_config(config_path, original.clone());
+
+    state.set_import_candidates_for_test(vec![aikit_core::import::ImportCandidate {
+        source: aikit_core::import::ImportSource::Env,
+        provider_id: "openai".into(),
+        provider_name: "OpenAI".into(),
+        base_url: Some("https://api.openai.com/v1".into()),
+        api_key_name: Some("OPENAI_API_KEY".into()),
+        api_key_value: Some("sk-test".into()),
+        model: Some("gpt-4.1-mini".into()),
+        warnings: vec![],
+    }]);
+    state.open_import_prompt().unwrap();
+    let result = state.confirm_import_all();
+
+    assert!(result.is_err());
+    assert_eq!(state.config, original);
 }
 
 fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {

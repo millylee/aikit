@@ -271,10 +271,17 @@ pub fn apply_import_candidates(
                 idx
             }
             None => {
+                let Some(base_url) = candidate.base_url.clone() else {
+                    result.warnings.push(format!(
+                        "Skipped import candidate '{}' from {:?}: base URL is required before import",
+                        candidate.provider_name, candidate.source
+                    ));
+                    continue;
+                };
                 config.providers.push(ProviderConfig {
                     id: candidate.provider_id.clone(),
                     name: candidate.provider_name.clone(),
-                    base_url: candidate.base_url.clone().unwrap_or_default(),
+                    base_url,
                     enabled: true,
                     api_keys: Vec::new(),
                     models_cache: None,
