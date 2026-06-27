@@ -10,6 +10,10 @@ use aikit_core::{
         add_api_key, add_provider, backup_config_file, delete_api_key, delete_provider,
         update_api_key, update_provider, ApiKeyForm, ProviderForm,
     },
+    import::{
+        apply_import_candidates, candidate_fingerprint, scan_claude_config, scan_codex_config,
+        scan_env, scan_gemini_config, ImportCandidate, ImportPlan,
+    },
     provider::OpenAiCompatibleClient,
     targets::{
         claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
@@ -38,6 +42,7 @@ pub struct AppState {
     pub modal_state: ModalState,
     detail_index: usize,
     pub target_statuses: Vec<TargetStatus>,
+    import_candidates_for_test: Option<Vec<ImportCandidate>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +62,19 @@ pub enum ModalState {
     ConfirmDeleteApiKey {
         provider_id: String,
         api_key_id: String,
+    },
+    ImportPrompt {
+        candidates: Vec<ImportCandidate>,
+        fingerprint: String,
+        selected_indices: Vec<bool>,
+        warnings: Vec<String>,
+    },
+    ImportList {
+        candidates: Vec<ImportCandidate>,
+        fingerprint: String,
+        selected_indices: Vec<bool>,
+        cursor: usize,
+        warnings: Vec<String>,
     },
 }
 
@@ -108,6 +126,7 @@ impl Default for AppState {
             modal_state: ModalState::None,
             detail_index: 0,
             target_statuses: Vec::new(),
+            import_candidates_for_test: None,
         }
     }
 }
@@ -256,6 +275,190 @@ impl AppState {
             api_key_id,
         };
         Ok(())
+    }
+
+    pub fn scan_import_candidates(&mut self) -> ImportPlan {
+        if let Some(candidates) = &self.import_candidates_for_test {
+            return ImportPlan {
+                candidates: candidates.clone(),
+                warnings: Vec::new(),
+            };
+        }
+
+        let mut plan = scan_env(std::env::vars());
+        append_scan_plan(&mut plan, scan_with_default_path("claude", &ClaudeWriter, scan_claude_config));
+        append_scan_plan(&mut plan, scan_with_default_path("gemini", &GeminiWriter, scan_gemini_config));
+        append_scan_plan(&mut plan, scan_with_default_path("codex", &CodexWriter, scan_codex_config));
+        plan
+    }
+
+    pub fn open_import_prompt(&mut self) -> Result<()> {
+        let plan = self.scan_import_candidates();
+        self.open_import_prompt_from_plan(plan)
+    }
+
+    pub fn open_import_prompt_from_plan(&mut self, plan: ImportPlan) -> Result<()> {
+        if plan.candidates.is_empty() {
+            self.set_status("No import candidates found");
+            return Ok(());
+        }
+        let fingerprint = candidate_fingerprint(&plan.candidates);
+        self.modal_state = ModalState::ImportPrompt {
+            selected_indices: vec![true; plan.candidates.len()],
+            candidates: plan.candidates,
+            fingerprint,
+            warnings: plan.warnings,
+        };
+        Ok(())
+    }
+
+    pub fn open_import_list(&mut self) -> Result<()> {
+        if let ModalState::ImportPrompt {
+            candidates,
+            fingerprint,
+            selected_indices,
+            warnings,
+        } = self.modal_state.clone()
+        {
+            self.modal_state = ModalState::ImportList {
+                candidates,
+                fingerprint,
+                selected_indices,
+                cursor: 0,
+                warnings,
+            };
+            return Ok(());
+        }
+        Err(AikitError::Provider(
+            "import prompt is not open, cannot open list".into(),
+        ))
+    }
+
+    pub fn confirm_import_all(&mut self) -> Result<()> {
+        let (candidates, fingerprint) = match self.modal_state.clone() {
+            ModalState::ImportPrompt {
+                candidates,
+                fingerprint,
+                ..
+            }
+            | ModalState::ImportList {
+                candidates,
+                fingerprint,
+                ..
+            } => (candidates, fingerprint),
+            _ => {
+                return Err(AikitError::Provider(
+                    "import prompt is not open, cannot confirm import".into(),
+                ))
+            }
+        };
+        self.apply_import_candidates_to_config(candidates, Some(fingerprint))
+    }
+
+    pub fn skip_import_prompt(&mut self) -> Result<()> {
+        let fingerprint = match self.modal_state.clone() {
+            ModalState::ImportPrompt { fingerprint, .. } | ModalState::ImportList { fingerprint, .. } => {
+                fingerprint
+            }
+            _ => {
+                return Err(AikitError::Provider(
+                    "import prompt is not open, cannot skip import".into(),
+                ))
+            }
+        };
+        self.config.import_prompt.skipped_fingerprint = Some(fingerprint);
+        self.persist_config_if_file_backed()?;
+        self.modal_state = ModalState::None;
+        self.set_status("Skipped import prompt");
+        Ok(())
+    }
+
+    pub fn toggle_import_candidate(&mut self) {
+        if let ModalState::ImportList {
+            selected_indices,
+            cursor,
+            ..
+        } = &mut self.modal_state
+        {
+            if *cursor < selected_indices.len() {
+                selected_indices[*cursor] = !selected_indices[*cursor];
+            }
+        }
+    }
+
+    pub fn import_list_next(&mut self) {
+        if let ModalState::ImportList {
+            candidates, cursor, ..
+        } = &mut self.modal_state
+        {
+            if !candidates.is_empty() {
+                *cursor = (*cursor + 1) % candidates.len();
+            }
+        }
+    }
+
+    pub fn import_list_previous(&mut self) {
+        if let ModalState::ImportList {
+            candidates, cursor, ..
+        } = &mut self.modal_state
+        {
+            if !candidates.is_empty() {
+                *cursor = (*cursor + candidates.len() - 1) % candidates.len();
+            }
+        }
+    }
+
+    pub fn cancel_import_list(&mut self) -> Result<()> {
+        if let ModalState::ImportList {
+            candidates,
+            fingerprint,
+            selected_indices,
+            warnings,
+            ..
+        } = self.modal_state.clone()
+        {
+            self.modal_state = ModalState::ImportPrompt {
+                candidates,
+                fingerprint,
+                selected_indices,
+                warnings,
+            };
+            return Ok(());
+        }
+        Err(AikitError::Provider("import list is not open".into()))
+    }
+
+    pub fn confirm_selected_imports(&mut self) -> Result<()> {
+        let (candidates, selected_indices, fingerprint) = match self.modal_state.clone() {
+            ModalState::ImportList {
+                candidates,
+                selected_indices,
+                fingerprint,
+                ..
+            } => (candidates, selected_indices, fingerprint),
+            _ => {
+                return Err(AikitError::Provider(
+                    "import list is not open, cannot confirm selected imports".into(),
+                ))
+            }
+        };
+
+        let selected = candidates
+            .into_iter()
+            .zip(selected_indices)
+            .filter_map(|(candidate, selected)| selected.then_some(candidate))
+            .collect::<Vec<_>>();
+
+        if selected.is_empty() {
+            self.set_status("No import candidate selected");
+            return Ok(());
+        }
+
+        self.apply_import_candidates_to_config(selected, Some(fingerprint))
+    }
+
+    pub fn set_import_candidates_for_test(&mut self, candidates: Vec<ImportCandidate>) {
+        self.import_candidates_for_test = Some(candidates);
     }
 
     pub fn set_modal_field(&mut self, field: &str, value: &str) -> Result<()> {
@@ -807,6 +1010,37 @@ impl AppState {
         }
     }
 
+    fn apply_import_candidates_to_config(
+        &mut self,
+        selected: Vec<ImportCandidate>,
+        imported_fingerprint: Option<String>,
+    ) -> Result<()> {
+        if self.config_path.exists() {
+            let _ = backup_config_file(&self.config_path)?;
+        }
+        let result = apply_import_candidates(&mut self.config, &selected);
+        if self
+            .config
+            .import_prompt
+            .skipped_fingerprint
+            .as_ref()
+            .zip(imported_fingerprint.as_ref())
+            .is_some_and(|(skipped, imported)| skipped == imported)
+        {
+            self.config.import_prompt.skipped_fingerprint = None;
+        }
+        self.persist_config_if_file_backed()?;
+        self.normalize_selection_indices();
+        self.modal_state = ModalState::None;
+        self.set_status(format!(
+            "Imported {} candidate(s), added {} provider(s), {} key(s)",
+            selected.len(),
+            result.added_providers,
+            result.added_keys
+        ));
+        Ok(())
+    }
+
     fn persist_config_if_file_backed(&self) -> Result<()> {
         // Unit tests may use a dummy single-segment relative path like "config.toml".
         // Skip only when that relative file does not exist yet.
@@ -834,6 +1068,25 @@ fn parse_bool_field(field: &str, value: &str) -> Result<bool> {
         _ => Err(AikitError::Provider(format!(
             "{field} must be a boolean (true/false)"
         ))),
+    }
+}
+
+fn append_scan_plan(base: &mut ImportPlan, plan: ImportPlan) {
+    base.candidates.extend(plan.candidates);
+    base.warnings.extend(plan.warnings);
+}
+
+fn scan_with_default_path(
+    label: &str,
+    writer: &dyn TargetWriter,
+    scanner: fn(&Path) -> ImportPlan,
+) -> ImportPlan {
+    match writer.default_path() {
+        Ok(path) => scanner(&path),
+        Err(err) => ImportPlan {
+            candidates: Vec::new(),
+            warnings: vec![format!("failed to resolve {label} config path: {err}")],
+        },
     }
 }
 

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{AppState, FocusedPane};
+use crate::app::{AppState, FocusedPane, ModalState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppAction {
@@ -12,6 +12,60 @@ pub enum AppAction {
 
 pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
     if state.is_modal_open() {
+        if matches!(state.modal_state, ModalState::ImportPrompt { .. }) {
+            return match key.code {
+                KeyCode::Enter => {
+                    if let Err(err) = state.confirm_import_all() {
+                        state.set_status(format!("Import failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                KeyCode::Esc => {
+                    if let Err(err) = state.skip_import_prompt() {
+                        state.set_status(format!("Import failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                KeyCode::Tab | KeyCode::Char('l') => {
+                    if let Err(err) = state.open_import_list() {
+                        state.set_status(format!("Import failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                _ => AppAction::None,
+            };
+        }
+
+        if matches!(state.modal_state, ModalState::ImportList { .. }) {
+            return match key.code {
+                KeyCode::Char(' ') => {
+                    state.toggle_import_candidate();
+                    AppAction::None
+                }
+                KeyCode::Down => {
+                    state.import_list_next();
+                    AppAction::None
+                }
+                KeyCode::Up => {
+                    state.import_list_previous();
+                    AppAction::None
+                }
+                KeyCode::Enter => {
+                    if let Err(err) = state.confirm_selected_imports() {
+                        state.set_status(format!("Import failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                KeyCode::Esc => {
+                    if let Err(err) = state.cancel_import_list() {
+                        state.set_status(format!("Import failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                _ => AppAction::None,
+            };
+        }
+
         return match key.code {
             KeyCode::Esc => {
                 state.cancel_modal();
@@ -85,6 +139,12 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
         }
         (KeyCode::Char('k'), _) => {
             if let Err(err) = state.open_add_api_key_modal() {
+                state.set_status(format!("Open modal failed: {err}"));
+            }
+            AppAction::None
+        }
+        (KeyCode::Char('i'), _) => {
+            if let Err(err) = state.open_import_prompt() {
                 state.set_status(format!("Open modal failed: {err}"));
             }
             AppAction::None

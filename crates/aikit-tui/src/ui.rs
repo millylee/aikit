@@ -2,6 +2,8 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
+use aikit_core::import::{ImportCandidate, ImportSource};
+
 use crate::app::{
     ApiKeyFormMode, AppState, FocusedPane, ModalState, ProviderFormMode,
 };
@@ -280,6 +282,51 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ),
             );
         }
+        ModalState::ImportPrompt {
+            candidates,
+            warnings,
+            ..
+        } => {
+            let mut lines = vec![
+                format!("Found {} import candidate(s):", candidates.len()),
+                String::new(),
+            ];
+            lines.extend(candidates.iter().map(format_import_candidate));
+            if !warnings.is_empty() {
+                lines.push(String::new());
+                lines.push("Warnings:".into());
+                lines.extend(warnings.iter().map(|warning| format!("- {warning}")));
+            }
+            lines.push(String::new());
+            lines.push("Enter import all, Tab/l select candidates, Esc skip".into());
+            render_modal_text(frame, area, "Import Providers", lines.join("\n"));
+        }
+        ModalState::ImportList {
+            candidates,
+            selected_indices,
+            cursor,
+            warnings,
+            ..
+        } => {
+            let mut lines = vec!["Select candidates to import:".into(), String::new()];
+            for (index, candidate) in candidates.iter().enumerate() {
+                let cursor_mark = if index == *cursor { ">" } else { " " };
+                let selected = selected_indices.get(index).copied().unwrap_or(false);
+                let selected_mark = if selected { "[x]" } else { "[ ]" };
+                lines.push(format!(
+                    "{cursor_mark}{selected_mark} {}",
+                    format_import_candidate(candidate)
+                ));
+            }
+            if !warnings.is_empty() {
+                lines.push(String::new());
+                lines.push("Warnings:".into());
+                lines.extend(warnings.iter().map(|warning| format!("- {warning}")));
+            }
+            lines.push(String::new());
+            lines.push("Space toggle, Up/Down move, Enter import selected, Esc cancel".into());
+            render_modal_text(frame, area, "Import Candidates", lines.join("\n"));
+        }
     }
 }
 
@@ -318,5 +365,35 @@ fn mask_secret(value: &str) -> String {
     if value.is_empty() {
         return String::new();
     }
-    "*".repeat(value.chars().count().min(8))
+    let chars = value.chars().collect::<Vec<_>>();
+    if chars.len() < 9 {
+        return "***".into();
+    }
+    let prefix = chars.iter().take(4).collect::<String>();
+    let suffix = chars[chars.len() - 4..].iter().collect::<String>();
+    format!("{prefix}...{suffix}")
+}
+
+fn format_import_candidate(candidate: &ImportCandidate) -> String {
+    let source = import_source_name(candidate.source);
+    let base_url = candidate.base_url.as_deref().unwrap_or("-");
+    let model = candidate.model.as_deref().unwrap_or("-");
+    let key_preview = candidate
+        .api_key_value
+        .as_deref()
+        .map(mask_secret)
+        .unwrap_or_else(|| "-".into());
+    format!(
+        "{} ({source}) key: {key_preview} base_url: {base_url} model: {model}",
+        candidate.provider_name
+    )
+}
+
+fn import_source_name(source: ImportSource) -> &'static str {
+    match source {
+        ImportSource::Env => "env",
+        ImportSource::Claude => "claude",
+        ImportSource::Gemini => "gemini",
+        ImportSource::Codex => "codex",
+    }
 }

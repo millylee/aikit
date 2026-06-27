@@ -339,6 +339,58 @@ fn modal_ignores_ctrl_char_input() {
     assert_eq!(form.id, "b");
 }
 
+#[test]
+fn import_prompt_skip_stores_fingerprint_without_writing_provider() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    AikitConfig::default().save_to(&config_path).unwrap();
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+
+    state.set_import_candidates_for_test(vec![aikit_core::import::ImportCandidate {
+        source: aikit_core::import::ImportSource::Env,
+        provider_id: "openai".into(),
+        provider_name: "OpenAI".into(),
+        base_url: Some("https://api.openai.com/v1".into()),
+        api_key_name: Some("OPENAI_API_KEY".into()),
+        api_key_value: Some("sk-test".into()),
+        model: Some("gpt-4.1-mini".into()),
+        warnings: vec![],
+    }]);
+    state.open_import_prompt().unwrap();
+    state.skip_import_prompt().unwrap();
+
+    let saved = AikitConfig::load_from(&config_path).unwrap();
+    assert!(saved.providers.is_empty());
+    assert!(saved.import_prompt.skipped_fingerprint.is_some());
+}
+
+#[test]
+fn import_prompt_confirm_writes_provider() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    AikitConfig::default().save_to(&config_path).unwrap();
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+
+    state.set_import_candidates_for_test(vec![aikit_core::import::ImportCandidate {
+        source: aikit_core::import::ImportSource::Env,
+        provider_id: "openai".into(),
+        provider_name: "OpenAI".into(),
+        base_url: Some("https://api.openai.com/v1".into()),
+        api_key_name: Some("OPENAI_API_KEY".into()),
+        api_key_value: Some("sk-test".into()),
+        model: Some("gpt-4.1-mini".into()),
+        warnings: vec![],
+    }]);
+    state.open_import_prompt().unwrap();
+    state.confirm_import_all().unwrap();
+
+    let saved = AikitConfig::load_from(&config_path).unwrap();
+    assert_eq!(saved.providers.len(), 1);
+    assert_eq!(saved.providers[0].api_keys[0].value, "sk-test");
+}
+
 fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
     AikitConfig {
         providers: vec![ProviderConfig {
