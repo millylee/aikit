@@ -50,8 +50,21 @@ impl CodexWriter {
 
         let mut model_providers = match root.remove("model_providers") {
             Some(toml::Value::Table(table)) => table,
-            Some(_) | None => toml::map::Map::new(),
+            Some(_) => {
+                return Err(AikitError::TargetWrite(
+                    "codex model_providers must be a table".into(),
+                ))
+            }
+            None => toml::map::Map::new(),
         };
+        if model_providers
+            .get("aikit")
+            .is_some_and(|value| !value.is_table())
+        {
+            return Err(AikitError::TargetWrite(
+                "codex model_providers.aikit must be a table".into(),
+            ));
+        }
         model_providers.insert("aikit".into(), toml::Value::Table(provider));
         root.insert(
             "model_providers".into(),

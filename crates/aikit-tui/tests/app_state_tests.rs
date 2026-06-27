@@ -7,6 +7,10 @@ use aikit_tui::{
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tempfile::tempdir;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
 
 #[test]
 fn tab_moves_focus_between_three_panes() {
@@ -39,6 +43,98 @@ fn r_requests_model_refresh() {
     );
 
     assert_eq!(action, AppAction::RefreshModels);
+}
+
+#[test]
+fn load_config_populates_visible_provider_key_model_and_target_state() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let codex_path = dir.path().join("codex").join("config.toml");
+    sample_config(codex_path).save_to(&config_path).unwrap();
+
+    let mut state = AppState::new(config_path);
+    state.load_config().unwrap();
+
+    assert_eq!(state.provider_index, 0);
+    assert_eq!(state.key_index, 0);
+    assert_eq!(state.model_index, 0);
+    assert_eq!(state.target_index, 0);
+    assert_eq!(state.selected_provider().unwrap().name, "Provider");
+    assert_eq!(state.selected_key().unwrap().name, "Key");
+    assert_eq!(state.selected_model().unwrap(), "model-active");
+    assert_eq!(state.selected_target().unwrap().id, "codex");
+}
+
+#[test]
+fn enter_selects_active_key_and_model_independently() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers[0].api_keys.push(ApiKeyConfig {
+        id: "backup".into(),
+        name: "Backup".into(),
+        value: "sk-backup".into(),
+    });
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+
+    state.focused_pane = FocusedPane::Details;
+    state.select_next();
+    state.select_next();
+    state.activate_selected();
+
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().api_key_id,
+        "backup"
+    );
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().model_id,
+        "model-active"
+    );
+
+    state.select_next();
+    state.activate_selected();
+
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().api_key_id,
+        "backup"
+    );
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().model_id,
+        "model-other"
+    );
+}
+
+#[test]
+fn space_toggles_selected_target() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Targets;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+    );
+
+    assert!(!state.config.targets[0].enabled);
+    assert!(state.target_status("codex").unwrap().contains("disabled"));
+}
+
+#[test]
+fn arrow_keys_move_selection_in_focused_pane() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers.push(ProviderConfig {
+        id: "other".into(),
+        name: "Other".into(),
+        base_url: "https://other.example/v1".into(),
+        enabled: true,
+        api_keys: vec![],
+        models_cache: None,
+    });
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+
+    handle_key(&mut state, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert_eq!(state.selected_provider().unwrap().id, "other");
 }
 
 #[test]
@@ -77,6 +173,45 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     assert_eq!(
         codex.get("model").and_then(|value| value.as_str()),
         Some("model-active")
+    );
+}
+
+#[tokio::test]
+async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "model-new" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let mut config = sample_config(dir.path().join("codex").join("config.toml"));
+    config.providers[0].base_url = format!("{}/v1", server.uri());
+    config.providers[0].models_cache = None;
+    config.active_selection = None;
+    config.save_to(&config_path).unwrap();
+
+    let client = aikit_core::provider::OpenAiCompatibleClient::new(reqwest::Client::new());
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+
+    let outcome = state.refresh_active_models(&client).await.unwrap();
+
+    assert_eq!(outcome.succeeded, 1);
+    assert_eq!(state.selected_model(), Some("model-new"));
+    let saved = AikitConfig::load_from(&config_path).unwrap();
+    assert_eq!(
+        saved.providers[0]
+            .models_cache
+            .as_ref()
+            .unwrap()
+            .models
+            .as_slice(),
+        ["model-new"]
     );
 }
 

@@ -51,9 +51,11 @@ dependencies = [
  "crossterm",
  "ratatui",
  "reqwest",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml",
+ "wiremock",
 ]
 
 [[package]]

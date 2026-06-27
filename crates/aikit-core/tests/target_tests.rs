@@ -1,6 +1,7 @@
 use aikit_core::targets::{
     claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
 };
+use aikit_core::AikitError;
 use tempfile::tempdir;
 
 #[test]
@@ -175,6 +176,54 @@ model = "keep-me"
 }
 
 #[test]
+fn codex_writer_refuses_non_table_model_providers_and_preserves_file() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let original = r#"
+model = "old-model"
+model_providers = "not-a-table"
+"#;
+    std::fs::write(&path, original).unwrap();
+
+    let result = CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetWrite(_))));
+    assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
+fn codex_writer_refuses_non_table_aikit_provider_and_preserves_file() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let original = r#"
+model = "old-model"
+
+[model_providers]
+aikit = "not-a-table"
+"#;
+    std::fs::write(&path, original).unwrap();
+
+    let result = CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetWrite(_))));
+    assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
 fn claude_writer_creates_minimal_json_config() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");
@@ -239,4 +288,24 @@ fn gemini_writer_preserves_existing_json_and_creates_backup() {
     assert_eq!(value["existing"], true);
     assert_eq!(value["aikit"]["model"], "gemini-model");
     assert_eq!(value["aikit"]["api_key"], "sk-new");
+}
+
+#[test]
+fn claude_writer_refuses_json_array_root_and_preserves_file() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let original = r#"[{"existing": true}]"#;
+    std::fs::write(&path, original).unwrap();
+
+    let result = ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetWrite(_))));
+    assert_eq!(std::fs::read_to_string(path).unwrap(), original);
 }

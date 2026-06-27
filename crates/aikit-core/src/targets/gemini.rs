@@ -22,6 +22,11 @@ impl GeminiWriter {
         } else {
             serde_json::json!({})
         };
+        if !value.is_object() {
+            return Err(AikitError::TargetWrite(
+                "gemini json config root must be an object".into(),
+            ));
+        }
 
         let backup_path = backup_file(path)?;
         if let Some(parent) = path.parent() {

@@ -17,6 +17,22 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             state.focus_next_pane();
             AppAction::None
         }
+        (KeyCode::Down, _) => {
+            state.select_next();
+            AppAction::None
+        }
+        (KeyCode::Up, _) => {
+            state.select_previous();
+            AppAction::None
+        }
+        (KeyCode::Enter, _) => {
+            state.activate_selected();
+            AppAction::None
+        }
+        (KeyCode::Char(' '), _) => {
+            state.toggle_selected_target();
+            AppAction::None
+        }
         (KeyCode::Char('r'), _) => AppAction::RefreshModels,
         (KeyCode::Char('s'), KeyModifiers::CONTROL) => AppAction::ApplySelection,
         _ => AppAction::None,
