@@ -26,6 +26,71 @@ Windows (Recommended):
 irm https://github.com/millylee/aikit/releases/latest/download/install.ps1 | iex
 ```
 
+## Usage
+
+Start the TUI:
+
+```sh
+aikit
+```
+
+Print the installed version:
+
+```sh
+aikit --version
+```
+
+If the installer just added aikit to your PATH, restart the terminal or run the PATH command printed by the installer before using `aikit`.
+
+### Add a Provider
+
+The current TUI reads providers from `aikit/config.toml` in your user config directory. Create the file first, then start `aikit`.
+
+Common config locations:
+
+- Windows: `%APPDATA%\aikit\config.toml`
+- macOS: `~/Library/Application Support/aikit/config.toml`
+- Linux: `~/.config/aikit/config.toml`
+
+Minimal example:
+
+```toml
+[[providers]]
+id = "openrouter"
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+enabled = true
+
+[[providers.api_keys]]
+id = "default"
+name = "Default"
+value = "sk-..."
+
+[[targets]]
+id = "claude"
+enabled = true
+
+[[targets]]
+id = "gemini"
+enabled = true
+
+[[targets]]
+id = "codex"
+enabled = true
+```
+
+API keys are stored as plain text in the local config file.
+
+### TUI Keys
+
+- `Tab`: switch between Providers, Details, and Targets panes.
+- `Up` / `Down`: move selection in the focused pane.
+- `Enter`: activate the selected provider, API key, model, or target.
+- `Space`: toggle the selected target.
+- `r`: refresh models for the selected provider using the selected API key.
+- `Ctrl+s`: apply the active provider + API key + model to enabled targets.
+- `q` / `Esc`: quit.
+
 ## Development
 
 ```sh
