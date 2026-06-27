@@ -23,9 +23,51 @@ function Invoke-Git {
     }
 }
 
+function New-GitCommit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    $branch = (& git branch --show-current).Trim()
+    if (-not $branch) {
+        throw "Cannot create a release commit from a detached HEAD."
+    }
+
+    $tree = (& git write-tree).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "git write-tree failed."
+    }
+
+    $parent = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "git rev-parse HEAD failed."
+    }
+
+    $author = (& git var GIT_AUTHOR_IDENT).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "git var GIT_AUTHOR_IDENT failed."
+    }
+
+    $committer = (& git var GIT_COMMITTER_IDENT).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "git var GIT_COMMITTER_IDENT failed."
+    }
+
+    $commitBody = "tree $tree`nparent $parent`nauthor $author`ncommitter $committer`n`n$Message`n"
+    $commit = ($commitBody | git hash-object -t commit -w --stdin).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "git hash-object failed."
+    }
+
+    Invoke-Git -Arguments @("update-ref", "refs/heads/$branch", $commit)
+    return $commit
+}
+
 function Get-WorkspaceVersion {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
         [string[]]$Lines
     )
 
@@ -112,7 +154,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Invoke-Git -Arguments @("add", "Cargo.toml", "Cargo.lock")
-Invoke-Git -Arguments @("commit", "-m", "chore(release): $tag")
+$null = New-GitCommit -Message "chore(release): $tag"
 Invoke-Git -Arguments @("tag", "-a", $tag, "-m", $tag)
 
 if ($Push) {
