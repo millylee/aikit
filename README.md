@@ -40,6 +40,27 @@ Run the TUI locally:
 cargo run -p aikit-tui
 ```
 
+## Release Version
+
+Bump the workspace version, create a release commit, and tag it:
+
+```powershell
+pwsh scripts/version.ps1 patch
+```
+
+Push the current branch and tag:
+
+```powershell
+pwsh scripts/version.ps1 patch -Push
+```
+
+Use `minor`, `major`, or an explicit version when needed:
+
+```powershell
+pwsh scripts/version.ps1 minor
+pwsh scripts/version.ps1 -Version 0.2.0
+```
+
 ## License
 
 BSD-2-Clause

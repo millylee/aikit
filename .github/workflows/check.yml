@@ -3,7 +3,7 @@ name: check
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ["**"]
 
 jobs:
   rust:
@@ -27,8 +27,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shellcheck
           shellcheck scripts/install.sh
-      - name: Check PowerShell installer
+      - name: Check PowerShell scripts
         shell: pwsh
         run: |
           Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
-          Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Error -EnableExit
+          Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Error -EnableExit
