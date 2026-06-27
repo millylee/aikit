@@ -54,7 +54,7 @@ add_path_to_profile() {
     *)
       {
         printf '\n# aikit\n'
-        printf 'export PATH="%s:$PATH"\n' "$bin_dir"
+        printf "export PATH=\"%s:\$PATH\"\n" "$bin_dir"
       } >>"$profile"
       ;;
   esac
