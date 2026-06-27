@@ -6,6 +6,10 @@ use aikit_core::{
         default_config_path, ActiveSelection, AikitConfig, ApiKeyConfig, ProviderConfig,
         TargetConfig,
     },
+    config_ops::{
+        add_api_key, add_provider, backup_config_file, delete_api_key, delete_provider,
+        update_api_key, update_provider, ApiKeyForm, ProviderForm,
+    },
     provider::OpenAiCompatibleClient,
     targets::{
         claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
@@ -31,6 +35,7 @@ pub struct AppState {
     pub key_index: usize,
     pub model_index: usize,
     pub target_index: usize,
+    pub modal_state: ModalState,
     detail_index: usize,
     pub target_statuses: Vec<TargetStatus>,
 }
@@ -39,6 +44,54 @@ pub struct AppState {
 pub struct TargetStatus {
     pub target_id: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModalState {
+    None,
+    ProviderForm(ProviderFormState),
+    ApiKeyForm(ApiKeyFormState),
+    ConfirmDeleteProvider {
+        provider_id: String,
+    },
+    ConfirmDeleteApiKey {
+        provider_id: String,
+        api_key_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProviderFormMode {
+    Add,
+    Edit { original_id: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderFormState {
+    pub mode: ProviderFormMode,
+    pub current_field: usize,
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub enabled: String,
+    pub validation_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApiKeyFormMode {
+    Add,
+    Edit { original_id: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiKeyFormState {
+    pub mode: ApiKeyFormMode,
+    pub provider_id: String,
+    pub current_field: usize,
+    pub id: String,
+    pub name: String,
+    pub value: String,
+    pub validation_error: Option<String>,
 }
 
 impl Default for AppState {
@@ -52,6 +105,7 @@ impl Default for AppState {
             key_index: 0,
             model_index: 0,
             target_index: 0,
+            modal_state: ModalState::None,
             detail_index: 0,
             target_statuses: Vec::new(),
         }
@@ -97,6 +151,277 @@ impl AppState {
 
     pub fn set_status(&mut self, message: impl Into<String>) {
         self.status = message.into();
+    }
+
+    pub fn is_modal_open(&self) -> bool {
+        !matches!(self.modal_state, ModalState::None)
+    }
+
+    pub fn modal_is_confirmation(&self) -> bool {
+        matches!(
+            self.modal_state,
+            ModalState::ConfirmDeleteProvider { .. } | ModalState::ConfirmDeleteApiKey { .. }
+        )
+    }
+
+    pub fn open_add_provider_modal(&mut self) {
+        self.modal_state = ModalState::ProviderForm(ProviderFormState {
+            mode: ProviderFormMode::Add,
+            current_field: 0,
+            id: String::new(),
+            name: String::new(),
+            base_url: String::new(),
+            enabled: "true".into(),
+            validation_error: None,
+        });
+    }
+
+    pub fn open_edit_provider_modal(&mut self) -> Result<()> {
+        let provider = self
+            .selected_provider()
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        self.modal_state = ModalState::ProviderForm(ProviderFormState {
+            mode: ProviderFormMode::Edit {
+                original_id: provider.id.clone(),
+            },
+            current_field: 0,
+            id: provider.id.clone(),
+            name: provider.name.clone(),
+            base_url: provider.base_url.clone(),
+            enabled: provider.enabled.to_string(),
+            validation_error: None,
+        });
+        Ok(())
+    }
+
+    pub fn open_add_api_key_modal(&mut self) -> Result<()> {
+        let provider_id = self
+            .selected_provider()
+            .map(|provider| provider.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        self.modal_state = ModalState::ApiKeyForm(ApiKeyFormState {
+            mode: ApiKeyFormMode::Add,
+            provider_id,
+            current_field: 0,
+            id: String::new(),
+            name: String::new(),
+            value: String::new(),
+            validation_error: None,
+        });
+        Ok(())
+    }
+
+    pub fn open_edit_api_key_modal(&mut self) -> Result<()> {
+        let provider = self
+            .selected_provider()
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        let key = provider
+            .api_keys
+            .get(self.key_index)
+            .ok_or_else(|| AikitError::ConfigParse("no api key selected".into()))?;
+        self.modal_state = ModalState::ApiKeyForm(ApiKeyFormState {
+            mode: ApiKeyFormMode::Edit {
+                original_id: key.id.clone(),
+            },
+            provider_id: provider.id.clone(),
+            current_field: 0,
+            id: key.id.clone(),
+            name: key.name.clone(),
+            value: key.value.clone(),
+            validation_error: None,
+        });
+        Ok(())
+    }
+
+    pub fn open_delete_provider_confirmation(&mut self) -> Result<()> {
+        let provider_id = self
+            .selected_provider()
+            .map(|provider| provider.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        self.modal_state = ModalState::ConfirmDeleteProvider { provider_id };
+        Ok(())
+    }
+
+    pub fn open_delete_api_key_confirmation(&mut self) -> Result<()> {
+        let provider = self
+            .selected_provider()
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        let api_key_id = provider
+            .api_keys
+            .get(self.key_index)
+            .map(|key| key.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no api key selected".into()))?;
+        self.modal_state = ModalState::ConfirmDeleteApiKey {
+            provider_id: provider.id.clone(),
+            api_key_id,
+        };
+        Ok(())
+    }
+
+    pub fn set_modal_field(&mut self, field: &str, value: &str) -> Result<()> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.validation_error = None;
+                match field {
+                    "id" => form.id = value.into(),
+                    "name" => form.name = value.into(),
+                    "base_url" => form.base_url = value.into(),
+                    "enabled" => form.enabled = value.into(),
+                    other => {
+                        return Err(AikitError::Provider(format!(
+                            "unknown provider field: {other}"
+                        )))
+                    }
+                }
+                Ok(())
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.validation_error = None;
+                match field {
+                    "id" => form.id = value.into(),
+                    "name" => form.name = value.into(),
+                    "value" => form.value = value.into(),
+                    other => {
+                        return Err(AikitError::Provider(format!(
+                            "unknown api key field: {other}"
+                        )))
+                    }
+                }
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("modal does not have editable fields".into())),
+        }
+    }
+
+    pub fn modal_next_field(&mut self) {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.current_field = (form.current_field + 1) % 4;
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.current_field = (form.current_field + 1) % 3;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn modal_previous_field(&mut self) {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.current_field = (form.current_field + 4 - 1) % 4;
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.current_field = (form.current_field + 3 - 1) % 3;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn modal_append_char(&mut self, ch: char) -> Result<()> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.validation_error = None;
+                match form.current_field {
+                    0 => form.id.push(ch),
+                    1 => form.name.push(ch),
+                    2 => form.base_url.push(ch),
+                    3 => form.enabled.push(ch),
+                    _ => {}
+                }
+                Ok(())
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.validation_error = None;
+                match form.current_field {
+                    0 => form.id.push(ch),
+                    1 => form.name.push(ch),
+                    2 => form.value.push(ch),
+                    _ => {}
+                }
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("no modal form is open".into())),
+        }
+    }
+
+    pub fn modal_backspace_field(&mut self) -> Result<()> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.validation_error = None;
+                match form.current_field {
+                    0 => {
+                        form.id.pop();
+                    }
+                    1 => {
+                        form.name.pop();
+                    }
+                    2 => {
+                        form.base_url.pop();
+                    }
+                    3 => {
+                        form.enabled.pop();
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.validation_error = None;
+                match form.current_field {
+                    0 => {
+                        form.id.pop();
+                    }
+                    1 => {
+                        form.name.pop();
+                    }
+                    2 => {
+                        form.value.pop();
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("no modal form is open".into())),
+        }
+    }
+
+    pub fn save_modal(&mut self) -> Result<()> {
+        match self.modal_state.clone() {
+            ModalState::ProviderForm(form) => self.save_provider_form(form),
+            ModalState::ApiKeyForm(form) => self.save_api_key_form(form),
+            _ => Err(AikitError::Provider("modal is not a saveable form".into())),
+        }
+    }
+
+    pub fn confirm_modal(&mut self) -> Result<()> {
+        match self.modal_state.clone() {
+            ModalState::ConfirmDeleteProvider { provider_id } => {
+                let _ = backup_config_file(&self.config_path)?;
+                delete_provider(&mut self.config, &provider_id)?;
+                self.persist_config_if_file_backed()?;
+                self.normalize_selection_indices();
+                self.modal_state = ModalState::None;
+                self.set_status(format!("Deleted provider {provider_id}"));
+                Ok(())
+            }
+            ModalState::ConfirmDeleteApiKey {
+                provider_id,
+                api_key_id,
+            } => {
+                let _ = backup_config_file(&self.config_path)?;
+                delete_api_key(&mut self.config, &provider_id, &api_key_id)?;
+                self.persist_config_if_file_backed()?;
+                self.normalize_selection_indices();
+                self.modal_state = ModalState::None;
+                self.set_status(format!("Deleted API key {api_key_id}"));
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("modal does not require confirmation".into())),
+        }
+    }
+
+    pub fn cancel_modal(&mut self) {
+        self.modal_state = ModalState::None;
     }
 
     pub fn selected_provider(&self) -> Option<&ProviderConfig> {
@@ -365,6 +690,139 @@ impl AppState {
             self.target_statuses
                 .push(TargetStatus { target_id, message });
         }
+    }
+
+    fn save_provider_form(&mut self, form: ProviderFormState) -> Result<()> {
+        let enabled = parse_bool_field("enabled", &form.enabled).map_err(|err| {
+            self.set_provider_modal_error(err.to_string());
+            err
+        })?;
+        let provider_id = form.id.clone();
+        let op_result = match &form.mode {
+            ProviderFormMode::Add => add_provider(
+                &mut self.config,
+                ProviderForm {
+                    id: form.id,
+                    name: form.name,
+                    base_url: form.base_url,
+                    enabled,
+                },
+            ),
+            ProviderFormMode::Edit { original_id } => update_provider(
+                &mut self.config,
+                original_id,
+                ProviderForm {
+                    id: form.id,
+                    name: form.name,
+                    base_url: form.base_url,
+                    enabled,
+                },
+            ),
+        };
+
+        if let Err(err) = op_result {
+            self.set_provider_modal_error(err.to_string());
+            return Err(err);
+        }
+
+        self.persist_config_if_file_backed()?;
+        if let Some(index) = self
+            .config
+            .providers
+            .iter()
+            .position(|provider| provider.id == provider_id)
+        {
+            self.provider_index = index;
+        }
+        self.normalize_selection_indices();
+        self.modal_state = ModalState::None;
+        self.set_status("Saved provider");
+        Ok(())
+    }
+
+    fn save_api_key_form(&mut self, form: ApiKeyFormState) -> Result<()> {
+        let key_id = form.id.clone();
+        let op_result = match &form.mode {
+            ApiKeyFormMode::Add => add_api_key(
+                &mut self.config,
+                &form.provider_id,
+                ApiKeyForm {
+                    id: form.id,
+                    name: form.name,
+                    value: form.value,
+                },
+            ),
+            ApiKeyFormMode::Edit { original_id } => update_api_key(
+                &mut self.config,
+                &form.provider_id,
+                original_id,
+                ApiKeyForm {
+                    id: form.id,
+                    name: form.name,
+                    value: form.value,
+                },
+            ),
+        };
+
+        if let Err(err) = op_result {
+            self.set_api_key_modal_error(err.to_string());
+            return Err(err);
+        }
+
+        self.persist_config_if_file_backed()?;
+        if let Some(provider_index) = self
+            .config
+            .providers
+            .iter()
+            .position(|provider| provider.id == form.provider_id)
+        {
+            self.provider_index = provider_index;
+            if let Some(provider) = self.config.providers.get(provider_index) {
+                if let Some(index) = provider.api_keys.iter().position(|key| key.id == key_id) {
+                    self.key_index = index;
+                }
+            }
+        }
+        self.normalize_selection_indices();
+        self.modal_state = ModalState::None;
+        self.set_status("Saved API key");
+        Ok(())
+    }
+
+    fn set_provider_modal_error(&mut self, message: String) {
+        if let ModalState::ProviderForm(form) = &mut self.modal_state {
+            form.validation_error = Some(message);
+        }
+    }
+
+    fn set_api_key_modal_error(&mut self, message: String) {
+        if let ModalState::ApiKeyForm(form) = &mut self.modal_state {
+            form.validation_error = Some(message);
+        }
+    }
+
+    fn persist_config_if_file_backed(&self) -> Result<()> {
+        // Unit tests may use a dummy relative filename like "config.toml" with no
+        // meaningful parent directory; skip filesystem writes in that case only.
+        if self.config_path.is_relative()
+            && self
+                .config_path
+                .parent()
+                .is_none_or(|parent| parent.as_os_str().is_empty())
+        {
+            return Ok(());
+        }
+        self.config.save_to(&self.config_path)
+    }
+}
+
+fn parse_bool_field(field: &str, value: &str) -> Result<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "y" | "on" => Ok(true),
+        "false" | "0" | "no" | "n" | "off" => Ok(false),
+        _ => Err(AikitError::Provider(format!(
+            "{field} must be a boolean (true/false)"
+        ))),
     }
 }
 

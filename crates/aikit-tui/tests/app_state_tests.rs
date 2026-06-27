@@ -215,6 +215,63 @@ async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() 
     );
 }
 
+#[test]
+fn provider_modal_save_adds_provider() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig::default(),
+    );
+
+    state.open_add_provider_modal();
+    state.set_modal_field("id", "openrouter").unwrap();
+    state.set_modal_field("name", "OpenRouter").unwrap();
+    state
+        .set_modal_field("base_url", "https://openrouter.ai/api/v1")
+        .unwrap();
+    state.save_modal().unwrap();
+
+    assert_eq!(state.config.providers[0].id, "openrouter");
+}
+
+#[test]
+fn api_key_modal_save_adds_key_to_selected_provider() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig {
+            providers: vec![ProviderConfig {
+                id: "provider".into(),
+                name: "Provider".into(),
+                base_url: "https://example.com/v1".into(),
+                enabled: true,
+                api_keys: vec![],
+                models_cache: None,
+            }],
+            ..AikitConfig::default()
+        },
+    );
+
+    state.open_add_api_key_modal().unwrap();
+    state.set_modal_field("id", "default").unwrap();
+    state.set_modal_field("name", "Default").unwrap();
+    state.set_modal_field("value", "sk-test").unwrap();
+    state.save_modal().unwrap();
+
+    assert_eq!(state.config.providers[0].api_keys[0].id, "default");
+}
+
+#[test]
+fn delete_provider_confirmation_clears_provider() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+
+    state.open_delete_provider_confirmation().unwrap();
+    state.confirm_modal().unwrap();
+
+    assert!(state.config.providers.is_empty());
+}
+
 fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
     AikitConfig {
         providers: vec![ProviderConfig {
@@ -238,6 +295,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
             api_key_id: "key".into(),
             model_id: "model-active".into(),
         }),
+        import_prompt: Default::default(),
         targets: vec![TargetConfig {
             id: "codex".into(),
             enabled: true,

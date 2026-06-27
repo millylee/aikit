@@ -1,8 +1,10 @@
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
-use crate::app::{AppState, FocusedPane};
+use crate::app::{
+    ApiKeyFormMode, AppState, FocusedPane, ModalState, ProviderFormMode,
+};
 
 pub fn render(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
@@ -40,6 +42,8 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 
     let status = Paragraph::new(state.status.as_str());
     frame.render_widget(status, main_layout[1]);
+
+    render_modal(frame, state);
 }
 
 fn pane_title(title: &str, focused: bool) -> String {
@@ -183,4 +187,136 @@ fn targets_text(state: &AppState) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn render_modal(frame: &mut Frame, state: &AppState) {
+    let area = centered_rect(70, 50, frame.area());
+    match &state.modal_state {
+        ModalState::None => {}
+        ModalState::ProviderForm(form) => {
+            let title = match form.mode {
+                ProviderFormMode::Add => "Add Provider",
+                ProviderFormMode::Edit { .. } => "Edit Provider",
+            };
+            let mut lines = vec![
+                format!(
+                    "{} id: {}",
+                    field_cursor(form.current_field == 0),
+                    form.id.as_str()
+                ),
+                format!(
+                    "{} name: {}",
+                    field_cursor(form.current_field == 1),
+                    form.name.as_str()
+                ),
+                format!(
+                    "{} base_url: {}",
+                    field_cursor(form.current_field == 2),
+                    form.base_url.as_str()
+                ),
+                format!(
+                    "{} enabled: {}",
+                    field_cursor(form.current_field == 3),
+                    form.enabled.as_str()
+                ),
+                String::new(),
+                "Tab/Shift+Tab switch field, Enter save, Esc cancel".into(),
+            ];
+            if let Some(error) = &form.validation_error {
+                lines.push(format!("Error: {error}"));
+            }
+            render_modal_text(frame, area, title, lines.join("\n"));
+        }
+        ModalState::ApiKeyForm(form) => {
+            let title = match form.mode {
+                ApiKeyFormMode::Add => "Add API Key",
+                ApiKeyFormMode::Edit { .. } => "Edit API Key",
+            };
+            let value = if form.current_field == 2 {
+                form.value.clone()
+            } else {
+                mask_secret(&form.value)
+            };
+            let mut lines = vec![
+                format!(
+                    "{} id: {}",
+                    field_cursor(form.current_field == 0),
+                    form.id.as_str()
+                ),
+                format!(
+                    "{} name: {}",
+                    field_cursor(form.current_field == 1),
+                    form.name.as_str()
+                ),
+                format!("{} value: {}", field_cursor(form.current_field == 2), value),
+                String::new(),
+                "Tab/Shift+Tab switch field, Enter save, Esc cancel".into(),
+            ];
+            if let Some(error) = &form.validation_error {
+                lines.push(format!("Error: {error}"));
+            }
+            render_modal_text(frame, area, title, lines.join("\n"));
+        }
+        ModalState::ConfirmDeleteProvider { provider_id } => {
+            render_modal_text(
+                frame,
+                area,
+                "Delete Provider",
+                format!(
+                    "Delete provider `{provider_id}`?\nThis will remove all API keys.\n\nEnter confirm, Esc cancel"
+                ),
+            );
+        }
+        ModalState::ConfirmDeleteApiKey {
+            provider_id,
+            api_key_id,
+        } => {
+            render_modal_text(
+                frame,
+                area,
+                "Delete API Key",
+                format!(
+                    "Delete API key `{api_key_id}` from provider `{provider_id}`?\n\nEnter confirm, Esc cancel"
+                ),
+            );
+        }
+    }
+}
+
+fn render_modal_text(frame: &mut Frame, area: Rect, title: &str, text: String) {
+    frame.render_widget(Clear, area);
+    let widget = Paragraph::new(text)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .alignment(Alignment::Left);
+    frame.render_widget(widget, area);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+fn field_cursor(active: bool) -> &'static str {
+    if active { ">" } else { " " }
+}
+
+fn mask_secret(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    "*".repeat(value.chars().count().min(8))
 }
