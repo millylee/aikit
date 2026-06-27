@@ -1,7 +1,7 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
-REPO="${AIKIT_REPO:-aikit-rs/aikit}"
+REPO="${AIKIT_REPO:-millylee/aikit}"
 VERSION="${AIKIT_VERSION:-latest}"
 BIN_DIR="${AIKIT_BIN_DIR:-$HOME/.local/bin}"
 

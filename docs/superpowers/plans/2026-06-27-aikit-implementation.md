@@ -77,8 +77,9 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license = "MIT"
-repository = "https://github.com/aikit-rs/aikit"
+authors = ["MillyLee <millyleecn@gmail.com>"]
+license = "BSD-2-Clause"
+repository = "https://github.com/millylee/aikit"
 
 [workspace.dependencies]
 color-eyre = "0.6"
@@ -1078,7 +1079,7 @@ git commit -m "Add three-pane TUI shell"
 **Interfaces:**
 - Produces: CI for fmt, clippy, and tests.
 - Produces: tag-triggered release artifacts for Linux, macOS, and Windows.
-- Produces: install scripts that accept `AIKIT_REPO=owner/repo` and default to `aikit-rs/aikit`.
+- Produces: install scripts that accept `AIKIT_REPO=owner/repo` and default to `millylee/aikit`.
 
 - [ ] **Step 1: Create check workflow**
 
@@ -1115,9 +1116,9 @@ jobs:
 `scripts/install.sh` behavior:
 
 ```sh
-#!/usr/bin/env sh
-set -eu
-REPO="${AIKIT_REPO:-aikit-rs/aikit}"
+#!/usr/bin/env bash
+set -euo pipefail
+REPO="${AIKIT_REPO:-millylee/aikit}"
 VERSION="${AIKIT_VERSION:-latest}"
 BIN_DIR="${AIKIT_BIN_DIR:-$HOME/.local/bin}"
 ```
@@ -1127,7 +1128,7 @@ It detects `uname -s` and `uname -m`, downloads the matching artifact from GitHu
 `scripts/install.ps1` behavior:
 
 ```powershell
-$Repo = if ($env:AIKIT_REPO) { $env:AIKIT_REPO } else { "aikit-rs/aikit" }
+$Repo = if ($env:AIKIT_REPO) { $env:AIKIT_REPO } else { "millylee/aikit" }
 $Version = if ($env:AIKIT_VERSION) { $env:AIKIT_VERSION } else { "latest" }
 $BinDir = if ($env:AIKIT_BIN_DIR) { $env:AIKIT_BIN_DIR } else { Join-Path $HOME ".aikit\bin" }
 ```

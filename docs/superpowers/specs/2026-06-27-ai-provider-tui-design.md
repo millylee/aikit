@@ -160,4 +160,4 @@ The install scripts detect platform and architecture, download the matching GitH
 ## Open Questions For Implementation
 
 - Exact Claude Code, Gemini CLI, and Codex config paths and field names should be verified during implementation before writer behavior is finalized. Writers must fail closed if a current format cannot be parsed safely.
-- The GitHub repository owner/name is needed before install scripts can target real release URLs.
+- The GitHub repository owner/name is `millylee/aikit`; install scripts should target that repository by default.
