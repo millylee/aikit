@@ -8,7 +8,7 @@ use time::{format_description::FormatItem, macros::format_description, OffsetDat
 use crate::Result;
 
 const BACKUP_FORMAT: &[FormatItem<'_>] =
-    format_description!("[year][month][day]-[hour][minute][second]");
+    format_description!("[year][month][day]-[hour][minute][second].[subsecond digits:3]");
 
 pub fn backup_file(path: &Path) -> Result<Option<PathBuf>> {
     if !path.exists() {

@@ -64,3 +64,46 @@ fn codex_writer_refuses_invalid_existing_toml() {
     assert!(result.is_err());
     assert_eq!(std::fs::read_to_string(path).unwrap(), "not = [valid");
 }
+
+#[test]
+fn codex_writer_serializes_special_characters_in_toml() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+
+    let selection = TargetSelection {
+        base_url: "https://example.com/v1?ref=\"test\"".into(),
+        api_key: "sk\\key\"quoted".into(),
+        model: "model\\with\"quotes".into(),
+    };
+
+    CodexWriter::write_to_path(&path, &selection).unwrap();
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    let parsed: toml::Value = toml::from_str(&content).unwrap();
+
+    assert_eq!(
+        parsed.get("model").and_then(|v| v.as_str()),
+        Some(selection.model.as_str())
+    );
+    assert_eq!(
+        parsed.get("model_provider").and_then(|v| v.as_str()),
+        Some("aikit")
+    );
+
+    let provider = parsed
+        .get("model_providers")
+        .and_then(|v| v.get("aikit"))
+        .expect("model_providers.aikit table");
+    assert_eq!(
+        provider.get("base_url").and_then(|v| v.as_str()),
+        Some(selection.base_url.as_str())
+    );
+    assert_eq!(
+        provider.get("api_key").and_then(|v| v.as_str()),
+        Some(selection.api_key.as_str())
+    );
+    assert_eq!(
+        provider.get("name").and_then(|v| v.as_str()),
+        Some("aikit")
+    );
+}
