@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "aikit_tui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "aikit"
 path = "src/main.rs"
