@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod config;
 pub mod error;
+pub mod import;
 pub mod provider;
 pub mod targets;
 
