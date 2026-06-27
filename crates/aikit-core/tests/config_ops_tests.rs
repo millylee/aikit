@@ -1,8 +1,6 @@
 use aikit_core::{
     config::{ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig},
-    config_ops::{
-        add_provider, backup_config_file, delete_api_key, delete_provider, ProviderForm,
-    },
+    config_ops::{add_provider, backup_config_file, delete_api_key, delete_provider, ProviderForm},
 };
 use tempfile::tempdir;
 

@@ -63,8 +63,10 @@ Provider management keys in the main TUI:
 Import keys and behavior:
 
 - `i`: scan and import provider candidates.
-- On startup, if no providers are configured and import candidates are found, `aikit` shows an import prompt before changing config.
+- On startup, if no providers are configured, `aikit` scans environment variables plus Claude Code, Gemini CLI, and Codex config files for import candidates.
+- If import candidates are found, `aikit` shows an import prompt before changing config.
 - In the prompt, you can import all, skip, or open the selectable candidate list.
+- Missing or unparseable config files are soft-failed and shown as warnings; other import sources continue.
 
 Supported environment variables for import:
 
