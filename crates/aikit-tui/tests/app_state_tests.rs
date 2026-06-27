@@ -248,6 +248,40 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     );
 }
 
+#[test]
+fn apply_active_selection_without_api_key_reports_actionable_message() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let config = AikitConfig {
+        providers: vec![ProviderConfig {
+            id: "anyrouter".into(),
+            name: "Anyrouter".into(),
+            base_url: "https://anyrouter.top/v1".into(),
+            enabled: true,
+            api_keys: vec![],
+            models_cache: None,
+        }],
+        targets: vec![TargetConfig {
+            id: "claude".into(),
+            enabled: true,
+            config_path: None,
+        }],
+        ..AikitConfig::default()
+    };
+    config.save_to(&config_path).unwrap();
+    let mut state = AppState::new(config_path);
+    state.load_config().unwrap();
+
+    let outcome = state.apply_active_selection().unwrap();
+
+    assert_eq!(outcome.succeeded, 0);
+    assert_eq!(outcome.failed, 0);
+    assert_eq!(
+        outcome.message,
+        "Add an API key with + before applying targets"
+    );
+}
+
 #[tokio::test]
 async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() {
     let server = MockServer::start().await;

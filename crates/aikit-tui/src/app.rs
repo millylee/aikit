@@ -792,6 +792,12 @@ impl AppState {
     }
 
     pub fn apply_active_selection(&mut self) -> Result<AppCommandOutcome> {
+        if let Some(message) = self.apply_blocker_message() {
+            let outcome = AppCommandOutcome::success(message, 0, 0);
+            self.set_status(outcome.message.clone());
+            return Ok(outcome);
+        }
+
         self.config.save_to(&self.config_path)?;
         let outcome = apply_active_selection(&self.config_path)?;
         self.target_statuses = outcome.target_statuses.clone();
@@ -934,6 +940,25 @@ impl AppState {
             "Selected {} / {} / {}",
             provider_name, api_key_name, model
         ));
+    }
+
+    fn apply_blocker_message(&self) -> Option<&'static str> {
+        if self.config.active_selection.is_some() {
+            return None;
+        }
+
+        let provider = self.selected_provider()?;
+        if provider.api_keys.is_empty() {
+            return Some("Add an API key with + before applying targets");
+        }
+        if provider
+            .models_cache
+            .as_ref()
+            .is_none_or(|cache| cache.models.is_empty())
+        {
+            return Some("Refresh models with r, then select a model before applying targets");
+        }
+        Some("Select provider, API key, and model with Enter before applying targets")
     }
 
     fn set_target_status(&mut self, target_id: String, message: String) {
