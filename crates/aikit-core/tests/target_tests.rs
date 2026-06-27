@@ -1,4 +1,4 @@
-use aikit_core::targets::{codex::CodexWriter, TargetSelection};
+use aikit_core::targets::{claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection};
 use tempfile::tempdir;
 
 #[test]
@@ -106,4 +106,69 @@ fn codex_writer_serializes_special_characters_in_toml() {
         provider.get("name").and_then(|v| v.as_str()),
         Some("aikit")
     );
+}
+
+#[test]
+fn claude_writer_creates_minimal_json_config() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+        },
+    )
+    .unwrap();
+
+    let updated = std::fs::read_to_string(path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&updated).unwrap();
+    assert_eq!(value["aikit"]["model"], "claude-model");
+    assert_eq!(value["aikit"]["base_url"], "https://example.com/v1");
+    assert_eq!(value["aikit"]["api_key"], "sk-new");
+}
+
+#[test]
+fn gemini_writer_refuses_invalid_json() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, "{invalid json").unwrap();
+
+    let result = GeminiWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "gemini-model".into(),
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(std::fs::read_to_string(path).unwrap().contains("{invalid json"));
+}
+
+#[test]
+fn gemini_writer_preserves_existing_json_and_creates_backup() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"existing": true}"#).unwrap();
+
+    let result = GeminiWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "gemini-model".into(),
+        },
+    )
+    .unwrap();
+
+    assert!(result.backup_path.unwrap().exists());
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["existing"], true);
+    assert_eq!(value["aikit"]["model"], "gemini-model");
+    assert_eq!(value["aikit"]["api_key"], "sk-new");
 }
