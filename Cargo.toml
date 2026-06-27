@@ -1,0 +1,23 @@
+[workspace]
+members = ["crates/aikit-core", "crates/aikit-tui"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/aikit-rs/aikit"
+
+[workspace.dependencies]
+color-eyre = "0.6"
+crossterm = "0.29"
+directories = "6"
+ratatui = "0.30"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "macros", "serde"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+toml = "0.9"
+wiremock = "0.6"
