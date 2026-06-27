@@ -1,4 +1,5 @@
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
@@ -23,18 +24,18 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         ])
         .split(main_layout[0]);
 
-    let providers =
-        Paragraph::new(providers_text(state)).block(Block::default().borders(Borders::ALL).title(
-            pane_title("Providers", state.focused_pane == FocusedPane::Providers),
-        ));
-    let details =
-        Paragraph::new(details_text(state)).block(Block::default().borders(Borders::ALL).title(
-            pane_title("Details", state.focused_pane == FocusedPane::Details),
-        ));
-    let targets =
-        Paragraph::new(targets_text(state)).block(Block::default().borders(Borders::ALL).title(
-            pane_title("Targets", state.focused_pane == FocusedPane::Targets),
-        ));
+    let providers = Paragraph::new(providers_text(state)).block(pane_block(
+        "Providers",
+        state.focused_pane == FocusedPane::Providers,
+    ));
+    let details = Paragraph::new(details_text(state)).block(pane_block(
+        "Details",
+        state.focused_pane == FocusedPane::Details,
+    ));
+    let targets = Paragraph::new(targets_text(state)).block(pane_block(
+        "Targets",
+        state.focused_pane == FocusedPane::Targets,
+    ));
 
     frame.render_widget(providers, panes_layout[0]);
     frame.render_widget(details, panes_layout[1]);
@@ -46,9 +47,28 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     render_modal(frame, state);
 }
 
+fn pane_block(title: &str, focused: bool) -> Block<'static> {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(pane_title(title, focused));
+    if focused {
+        block
+            .border_style(focused_pane_style())
+            .title_style(focused_pane_style())
+    } else {
+        block
+    }
+}
+
+fn focused_pane_style() -> Style {
+    Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD)
+}
+
 fn pane_title(title: &str, focused: bool) -> String {
     if focused {
-        format!("> {title}")
+        format!("> {title} ACTIVE")
     } else {
         title.to_string()
     }

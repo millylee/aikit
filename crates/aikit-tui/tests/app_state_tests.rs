@@ -120,6 +120,78 @@ fn space_toggles_selected_target() {
 }
 
 #[test]
+fn space_only_toggles_target_when_targets_pane_is_focused() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Providers;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+    );
+
+    assert!(state.config.targets[0].enabled);
+    assert!(state.target_status("codex").is_none());
+}
+
+#[test]
+fn j_and_k_move_selection_in_focused_pane() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers.push(ProviderConfig {
+        id: "other".into(),
+        name: "Other".into(),
+        base_url: "https://other.example/v1".into(),
+        enabled: true,
+        api_keys: vec![],
+        models_cache: None,
+    });
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.selected_provider().unwrap().id, "other");
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.selected_provider().unwrap().id, "provider");
+}
+
+#[test]
+fn t_focuses_targets_and_j_k_move_target_selection() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.targets.push(TargetConfig {
+        id: "gemini".into(),
+        enabled: true,
+        config_path: None,
+    });
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.focused_pane, FocusedPane::Targets);
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.selected_target().unwrap().id, "gemini");
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.selected_target().unwrap().id, "codex");
+}
+
+#[test]
 fn arrow_keys_move_selection_in_focused_pane() {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.providers.push(ProviderConfig {

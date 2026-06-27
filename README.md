@@ -57,7 +57,7 @@ Provider management keys in the main TUI:
 - `a`: add provider.
 - `e`: edit selected provider.
 - `d`: delete selected provider (with confirmation).
-- `k`: add API key to selected provider.
+- `+`: add API key to selected provider.
 - `x`: delete selected API key (with confirmation).
 
 Import keys and behavior:
@@ -79,9 +79,10 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 ### TUI Keys
 
 - `Tab`: switch between Providers, Details, and Targets panes.
-- `Up` / `Down`: move selection in the focused pane.
-- `Enter`: activate the selected provider, API key, model, or target.
-- `Space`: toggle the selected target.
+- `t`: jump focus to the Targets pane.
+- `Up` / `Down` or `k` / `j`: move selection in the focused pane.
+- `Enter`: activate the selected provider, API key, model, or toggle the selected target.
+- `Space`: toggle the selected target when the Targets pane is focused.
 - `r`: refresh models for the selected provider using the selected API key.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
 - `q` / `Esc`: quit.

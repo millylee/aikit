@@ -137,7 +137,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             }
             AppAction::None
         }
-        (KeyCode::Char('k'), _) => {
+        (KeyCode::Char('+'), _) => {
             if let Err(err) = state.open_add_api_key_modal() {
                 state.set_status(format!("Open modal failed: {err}"));
             }
@@ -166,11 +166,15 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             state.focus_next_pane();
             AppAction::None
         }
-        (KeyCode::Down, _) => {
+        (KeyCode::Char('t'), _) => {
+            state.focused_pane = FocusedPane::Targets;
+            AppAction::None
+        }
+        (KeyCode::Down, _) | (KeyCode::Char('j'), _) => {
             state.select_next();
             AppAction::None
         }
-        (KeyCode::Up, _) => {
+        (KeyCode::Up, _) | (KeyCode::Char('k'), _) => {
             state.select_previous();
             AppAction::None
         }
@@ -179,7 +183,9 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char(' '), _) => {
-            state.toggle_selected_target();
+            if state.focused_pane == FocusedPane::Targets {
+                state.toggle_selected_target();
+            }
             AppAction::None
         }
         (KeyCode::Char('r'), _) => AppAction::RefreshModels,
