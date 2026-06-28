@@ -25,8 +25,8 @@ use aikit_core::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
     Providers,
-    Details,
-    Targets,
+    Selection,
+    ApplyTo,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +95,16 @@ pub struct ProviderFormState {
     pub name: String,
     pub base_url: String,
     pub enabled: String,
+    pub model: String,
     pub validation_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionItem {
+    ApiKey(usize),
+    Model(usize),
+    AddApiKey,
+    AddModel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,9 +181,9 @@ impl AppState {
 
     pub fn focus_next_pane(&mut self) {
         self.focused_pane = match self.focused_pane {
-            FocusedPane::Providers => FocusedPane::Details,
-            FocusedPane::Details => FocusedPane::Targets,
-            FocusedPane::Targets => FocusedPane::Providers,
+            FocusedPane::Providers => FocusedPane::Selection,
+            FocusedPane::Selection => FocusedPane::ApplyTo,
+            FocusedPane::ApplyTo => FocusedPane::Providers,
         };
     }
 
@@ -201,6 +210,7 @@ impl AppState {
             name: String::new(),
             base_url: String::new(),
             enabled: "true".into(),
+            model: String::new(),
             validation_error: None,
         });
     }
@@ -218,6 +228,7 @@ impl AppState {
             name: provider.name.clone(),
             base_url: provider.base_url.clone(),
             enabled: provider.enabled.to_string(),
+            model: self.selected_model().unwrap_or_default().to_string(),
             validation_error: None,
         });
         Ok(())
@@ -270,6 +281,23 @@ impl AppState {
         self.modal_state = ModalState::ModelForm(ModelFormState {
             provider_id,
             model: String::new(),
+            validation_error: None,
+        });
+        Ok(())
+    }
+
+    pub fn open_edit_model_modal(&mut self) -> Result<()> {
+        let provider_id = self
+            .selected_provider()
+            .map(|provider| provider.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        let model = self
+            .selected_model()
+            .ok_or_else(|| AikitError::ConfigParse("no model selected".into()))?
+            .to_string();
+        self.modal_state = ModalState::ModelForm(ModelFormState {
+            provider_id,
+            model,
             validation_error: None,
         });
         Ok(())
@@ -527,10 +555,9 @@ impl AppState {
             ModalState::ProviderForm(form) => {
                 form.validation_error = None;
                 match field {
-                    "id" => form.id = value.into(),
                     "name" => form.name = value.into(),
                     "base_url" => form.base_url = value.into(),
-                    "enabled" => form.enabled = value.into(),
+                    "model" => form.model = value.into(),
                     other => {
                         return Err(AikitError::Provider(format!(
                             "unknown provider field: {other}"
@@ -572,7 +599,7 @@ impl AppState {
     pub fn modal_next_field(&mut self) {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
-                form.current_field = (form.current_field + 1) % 4;
+                form.current_field = (form.current_field + 1) % 3;
             }
             ModalState::ApiKeyForm(form) => {
                 form.current_field = 0;
@@ -584,7 +611,7 @@ impl AppState {
     pub fn modal_previous_field(&mut self) {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
-                form.current_field = (form.current_field + 4 - 1) % 4;
+                form.current_field = (form.current_field + 3 - 1) % 3;
             }
             ModalState::ApiKeyForm(form) => {
                 form.current_field = 0;
@@ -598,10 +625,9 @@ impl AppState {
             ModalState::ProviderForm(form) => {
                 form.validation_error = None;
                 match form.current_field {
-                    0 => form.id.push(ch),
-                    1 => form.name.push(ch),
-                    2 => form.base_url.push(ch),
-                    3 => form.enabled.push(ch),
+                    0 => form.name.push(ch),
+                    1 => form.base_url.push(ch),
+                    2 => form.model.push(ch),
                     _ => {}
                 }
                 Ok(())
@@ -626,16 +652,13 @@ impl AppState {
                 form.validation_error = None;
                 match form.current_field {
                     0 => {
-                        form.id.pop();
-                    }
-                    1 => {
                         form.name.pop();
                     }
-                    2 => {
+                    1 => {
                         form.base_url.pop();
                     }
-                    3 => {
-                        form.enabled.pop();
+                    2 => {
+                        form.model.pop();
                     }
                     _ => {}
                 }
@@ -734,14 +757,14 @@ impl AppState {
                     self.sync_provider_children();
                 }
             }
-            FocusedPane::Details => {
-                let count = self.detail_item_count();
+            FocusedPane::Selection => {
+                let count = self.selection_item_count();
                 if count > 0 {
                     self.detail_index = (self.detail_index + 1) % count;
-                    self.apply_detail_index();
+                    self.apply_selection_index();
                 }
             }
-            FocusedPane::Targets => {
+            FocusedPane::ApplyTo => {
                 if !self.config.targets.is_empty() {
                     self.target_index = (self.target_index + 1) % self.config.targets.len();
                 }
@@ -758,14 +781,14 @@ impl AppState {
                     self.sync_provider_children();
                 }
             }
-            FocusedPane::Details => {
-                let count = self.detail_item_count();
+            FocusedPane::Selection => {
+                let count = self.selection_item_count();
                 if count > 0 {
                     self.detail_index = (self.detail_index + count - 1) % count;
-                    self.apply_detail_index();
+                    self.apply_selection_index();
                 }
             }
-            FocusedPane::Targets => {
+            FocusedPane::ApplyTo => {
                 if !self.config.targets.is_empty() {
                     self.target_index = (self.target_index + self.config.targets.len() - 1)
                         % self.config.targets.len();
@@ -776,8 +799,29 @@ impl AppState {
 
     pub fn activate_selected(&mut self) {
         match self.focused_pane {
-            FocusedPane::Providers | FocusedPane::Details => self.activate_current_selection(),
-            FocusedPane::Targets => self.toggle_selected_target(),
+            FocusedPane::Providers => self.activate_current_selection(),
+            FocusedPane::Selection => self.activate_selection_item(),
+            FocusedPane::ApplyTo => self.toggle_selected_target(),
+        }
+    }
+
+    pub fn edit_selected(&mut self) -> Result<()> {
+        match self.focused_pane {
+            FocusedPane::Providers => self.open_edit_provider_modal(),
+            FocusedPane::Selection => match self.selected_selection_item() {
+                Some(SelectionItem::ApiKey(_)) => self.open_edit_api_key_modal(),
+                Some(SelectionItem::Model(_)) => self.open_edit_model_modal(),
+                Some(SelectionItem::AddApiKey) => self.open_add_api_key_modal(),
+                Some(SelectionItem::AddModel) => self.open_add_model_modal(),
+                None => {
+                    self.set_status("Select an API key or model to edit");
+                    Ok(())
+                }
+            },
+            FocusedPane::ApplyTo => {
+                self.set_status("Use Space/Enter to toggle target");
+                Ok(())
+            }
         }
     }
 
@@ -829,20 +873,23 @@ impl AppState {
         Ok(outcome)
     }
 
-    pub fn detail_item_count(&self) -> usize {
-        self.selected_provider()
-            .map(|provider| provider.api_keys.len() + provider_model_count(provider))
-            .unwrap_or(0)
+    pub fn selection_item_count(&self) -> usize {
+        self.selection_items().len()
     }
 
     pub fn detail_index(&self) -> usize {
         self.detail_index
     }
 
-    pub fn details_selection_is_api_key(&self) -> bool {
-        self.selected_provider()
-            .map(|provider| self.detail_index < provider.api_keys.len())
-            .unwrap_or(false)
+    pub fn selected_selection_item(&self) -> Option<SelectionItem> {
+        self.selection_items().get(self.detail_index).copied()
+    }
+
+    pub fn selection_item_is_api_key(&self) -> bool {
+        matches!(
+            self.selected_selection_item(),
+            Some(SelectionItem::ApiKey(_))
+        )
     }
 
     fn normalize_selection_indices(&mut self) {
@@ -899,19 +946,58 @@ impl AppState {
         }
         self.detail_index = self
             .detail_index
-            .min(self.detail_item_count().saturating_sub(1));
-        self.apply_detail_index();
+            .min(self.selection_item_count().saturating_sub(1));
+        self.apply_selection_index();
     }
 
-    fn apply_detail_index(&mut self) {
+    fn selection_items(&self) -> Vec<SelectionItem> {
         let Some(provider) = self.selected_provider() else {
-            return;
+            return Vec::new();
         };
-        let key_count = provider.api_keys.len();
-        if self.detail_index < key_count {
-            self.key_index = self.detail_index;
+        let mut items = Vec::new();
+        if provider.api_keys.is_empty() {
+            items.push(SelectionItem::AddApiKey);
         } else {
-            self.model_index = self.detail_index - key_count;
+            items.extend((0..provider.api_keys.len()).map(SelectionItem::ApiKey));
+        }
+
+        let model_count = provider_model_count(provider);
+        if model_count == 0 {
+            items.push(SelectionItem::AddModel);
+        } else {
+            items.extend((0..model_count).map(SelectionItem::Model));
+        }
+        items
+    }
+
+    fn apply_selection_index(&mut self) {
+        match self.selected_selection_item() {
+            Some(SelectionItem::ApiKey(index)) => {
+                self.key_index = index;
+            }
+            Some(SelectionItem::Model(index)) => {
+                self.model_index = index;
+            }
+            Some(SelectionItem::AddApiKey | SelectionItem::AddModel) | None => {}
+        }
+    }
+
+    fn activate_selection_item(&mut self) {
+        match self.selected_selection_item() {
+            Some(SelectionItem::ApiKey(_) | SelectionItem::Model(_)) => {
+                self.activate_current_selection();
+            }
+            Some(SelectionItem::AddApiKey) => {
+                if let Err(err) = self.open_add_api_key_modal() {
+                    self.set_status(format!("Open modal failed: {err}"));
+                }
+            }
+            Some(SelectionItem::AddModel) => {
+                if let Err(err) = self.open_add_model_modal() {
+                    self.set_status(format!("Open modal failed: {err}"));
+                }
+            }
+            None => self.set_status("No selection item available"),
         }
     }
 
@@ -973,19 +1059,23 @@ impl AppState {
         }
     }
 
-    fn save_provider_form(&mut self, form: ProviderFormState) -> Result<()> {
+    fn save_provider_form(&mut self, mut form: ProviderFormState) -> Result<()> {
         let enabled = parse_bool_field("enabled", &form.enabled).inspect_err(|err| {
             self.set_provider_modal_error(err.to_string());
         })?;
+        if matches!(form.mode, ProviderFormMode::Add) && form.id.trim().is_empty() {
+            form.id = next_provider_id(&self.config, &form.name);
+        }
         let provider_id = form.id.clone();
+        let model = form.model.trim().to_string();
         let mut next_config = self.config.clone();
         let op_result = match &form.mode {
             ProviderFormMode::Add => add_provider(
                 &mut next_config,
                 ProviderForm {
-                    id: form.id,
-                    name: form.name,
-                    base_url: form.base_url,
+                    id: form.id.clone(),
+                    name: form.name.clone(),
+                    base_url: form.base_url.clone(),
                     enabled,
                 },
             ),
@@ -993,9 +1083,9 @@ impl AppState {
                 &mut next_config,
                 original_id,
                 ProviderForm {
-                    id: form.id,
-                    name: form.name,
-                    base_url: form.base_url,
+                    id: form.id.clone(),
+                    name: form.name.clone(),
+                    base_url: form.base_url.clone(),
                     enabled,
                 },
             ),
@@ -1006,6 +1096,11 @@ impl AppState {
             return Err(err);
         }
 
+        let model_status = if model.is_empty() {
+            None
+        } else {
+            upsert_manual_model_and_maybe_activate(&mut next_config, &provider_id, &model)?
+        };
         self.persist_config_if_file_backed_config(&next_config)?;
         self.config = next_config;
         if let Some(index) = self
@@ -1018,7 +1113,7 @@ impl AppState {
         }
         self.normalize_selection_indices();
         self.modal_state = ModalState::None;
-        self.set_status("Saved provider");
+        self.set_status(model_status.unwrap_or_else(|| "Saved provider".into()));
         Ok(())
     }
 
@@ -1118,12 +1213,8 @@ impl AppState {
             .ok_or_else(|| {
                 AikitError::Provider(format!("provider not found: {}", form.provider_id))
             })?;
-        let already_cached = provider
-            .models_cache
-            .as_ref()
-            .is_some_and(|cache| cache.models.iter().any(|cached| cached == &model));
         let already_manual = provider.manual_models.iter().any(|manual| manual == &model);
-        if !already_cached && !already_manual {
+        if !already_manual {
             provider.manual_models.push(model.clone());
         }
 
@@ -1468,6 +1559,67 @@ fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
         }
         number += 1;
     }
+}
+
+fn next_provider_id(config: &AikitConfig, name: &str) -> String {
+    let base = slugify_provider_name(name);
+    if !config.providers.iter().any(|provider| provider.id == base) {
+        return base;
+    }
+    let mut number = 2;
+    loop {
+        let candidate = format!("{base}-{number}");
+        if !config
+            .providers
+            .iter()
+            .any(|provider| provider.id == candidate)
+        {
+            return candidate;
+        }
+        number += 1;
+    }
+}
+
+fn slugify_provider_name(name: &str) -> String {
+    let slug = name
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "provider".into()
+    } else {
+        slug
+    }
+}
+
+fn upsert_manual_model_and_maybe_activate(
+    config: &mut AikitConfig,
+    provider_id: &str,
+    model: &str,
+) -> Result<Option<String>> {
+    let provider = config
+        .providers
+        .iter_mut()
+        .find(|provider| provider.id == provider_id)
+        .ok_or_else(|| AikitError::Provider(format!("provider not found: {provider_id}")))?;
+    if !provider.manual_models.iter().any(|manual| manual == model) {
+        provider.manual_models.push(model.to_string());
+    }
+    let Some(api_key_id) = provider.api_keys.first().map(|key| key.id.clone()) else {
+        return Ok(Some("Saved provider; add an API key with +".into()));
+    };
+    config.active_selection = Some(ActiveSelection {
+        provider_id: provider_id.to_string(),
+        api_key_id,
+        model_id: model.to_string(),
+    });
+    Ok(Some(format!("Saved provider and selected model {model}")))
 }
 
 fn write_target(

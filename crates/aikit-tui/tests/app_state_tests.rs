@@ -20,7 +20,7 @@ fn tab_moves_focus_between_three_panes() {
     let action = handle_key(&mut state, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert_eq!(action, AppAction::None);
-    assert_eq!(state.focused_pane, FocusedPane::Details);
+    assert_eq!(state.focused_pane, FocusedPane::Selection);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn enter_selects_active_key_and_model_independently() {
     });
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
 
-    state.focused_pane = FocusedPane::Details;
+    state.focused_pane = FocusedPane::Selection;
     state.select_next();
     state.select_next();
     state.activate_selected();
@@ -142,7 +142,7 @@ fn space_toggles_selected_target() {
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
     );
-    state.focused_pane = FocusedPane::Targets;
+    state.focused_pane = FocusedPane::ApplyTo;
 
     handle_key(
         &mut state,
@@ -154,12 +154,13 @@ fn space_toggles_selected_target() {
 }
 
 #[test]
-fn space_only_toggles_target_when_targets_pane_is_focused() {
+fn space_activates_current_item_without_toggling_unfocused_target() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
     );
     state.focused_pane = FocusedPane::Providers;
+    state.config.active_selection = None;
 
     handle_key(
         &mut state,
@@ -168,6 +169,10 @@ fn space_only_toggles_target_when_targets_pane_is_focused() {
 
     assert!(state.config.targets[0].enabled);
     assert!(state.target_status("codex").is_none());
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().provider_id,
+        "provider"
+    );
 }
 
 #[test]
@@ -211,7 +216,7 @@ fn t_focuses_targets_and_j_k_move_target_selection() {
         &mut state,
         KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
     );
-    assert_eq!(state.focused_pane, FocusedPane::Targets);
+    assert_eq!(state.focused_pane, FocusedPane::ApplyTo);
 
     handle_key(
         &mut state,
@@ -224,6 +229,55 @@ fn t_focuses_targets_and_j_k_move_target_selection() {
         KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
     );
     assert_eq!(state.selected_target().unwrap().id, "codex");
+}
+
+#[test]
+fn e_on_apply_to_does_not_open_provider_modal() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.modal_state, ModalState::None);
+    assert!(state.status.contains("toggle target"));
+}
+
+#[test]
+fn selection_empty_key_and_model_rows_open_add_modals() {
+    let config = AikitConfig {
+        providers: vec![ProviderConfig {
+            id: "provider".into(),
+            name: "Provider".into(),
+            base_url: "https://example.com/v1".into(),
+            enabled: true,
+            api_keys: vec![],
+            manual_models: Vec::new(),
+            models_cache: None,
+        }],
+        ..AikitConfig::default()
+    };
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    assert!(matches!(state.modal_state, ModalState::ApiKeyForm(_)));
+
+    state.cancel_modal();
+    state.select_next();
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    assert!(matches!(state.modal_state, ModalState::ModelForm(_)));
 }
 
 #[test]
@@ -366,7 +420,6 @@ fn provider_modal_save_adds_provider() {
     );
 
     state.open_add_provider_modal();
-    state.set_modal_field("id", "openrouter").unwrap();
     state.set_modal_field("name", "OpenRouter").unwrap();
     state
         .set_modal_field("base_url", "https://openrouter.ai/api/v1")
@@ -374,6 +427,39 @@ fn provider_modal_save_adds_provider() {
     state.save_modal().unwrap();
 
     assert_eq!(state.config.providers[0].id, "openrouter");
+}
+
+#[test]
+fn provider_modal_hides_internal_id_and_enabled_fields() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig::default(),
+    );
+
+    state.open_add_provider_modal();
+
+    assert!(state.set_modal_field("id", "internal").is_err());
+    assert!(state.set_modal_field("enabled", "false").is_err());
+}
+
+#[test]
+fn provider_modal_model_adds_manual_model_and_selects_when_key_exists() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+
+    state.open_edit_provider_modal().unwrap();
+    state.set_modal_field("model", "provider-model").unwrap();
+    state.save_modal().unwrap();
+
+    assert!(state.config.providers[0]
+        .manual_models
+        .contains(&"provider-model".to_string()));
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().model_id,
+        "provider-model"
+    );
 }
 
 #[test]
@@ -498,7 +584,7 @@ fn x_on_model_row_does_not_open_api_key_delete_confirmation() {
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
     );
-    state.focused_pane = FocusedPane::Details;
+    state.focused_pane = FocusedPane::Selection;
     state.select_next();
     let original_key_count = state.config.providers[0].api_keys.len();
 
@@ -529,7 +615,7 @@ fn modal_ignores_ctrl_char_input() {
     let ModalState::ProviderForm(form) = &state.modal_state else {
         panic!("provider modal should stay open");
     };
-    assert_eq!(form.id, "b");
+    assert_eq!(form.name, "b");
 }
 
 #[test]

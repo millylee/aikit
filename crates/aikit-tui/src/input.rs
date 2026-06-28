@@ -117,16 +117,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('e'), _) => {
-            let result = if state.focused_pane == FocusedPane::Details {
-                if state.details_selection_is_api_key() {
-                    state.open_edit_api_key_modal()
-                } else {
-                    Ok(())
-                }
-            } else {
-                state.open_edit_provider_modal()
-            };
-            if let Err(err) = result {
+            if let Err(err) = state.edit_selected() {
                 state.set_status(format!("Open modal failed: {err}"));
             }
             AppAction::None
@@ -156,12 +147,13 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('x'), _) => {
-            let result = if state.focused_pane == FocusedPane::Details
-                && !state.details_selection_is_api_key()
+            let result = if state.focused_pane == FocusedPane::Selection
+                && state.selection_item_is_api_key()
             {
-                Ok(())
-            } else {
                 state.open_delete_api_key_confirmation()
+            } else {
+                state.set_status("Select an API key to delete");
+                Ok(())
             };
             if let Err(err) = result {
                 state.set_status(format!("Open modal failed: {err}"));
@@ -173,7 +165,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('t'), _) => {
-            state.focused_pane = FocusedPane::Targets;
+            state.focused_pane = FocusedPane::ApplyTo;
             AppAction::None
         }
         (KeyCode::Down, _) | (KeyCode::Char('j'), _) => {
@@ -189,9 +181,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char(' '), _) => {
-            if state.focused_pane == FocusedPane::Targets {
-                state.toggle_selected_target();
-            }
+            state.activate_selected();
             AppAction::None
         }
         (KeyCode::Char('r'), _) => AppAction::RefreshModels,

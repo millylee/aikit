@@ -28,13 +28,13 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         "Providers",
         state.focused_pane == FocusedPane::Providers,
     ));
-    let details = Paragraph::new(details_text(state)).block(pane_block(
+    let details = Paragraph::new(selection_text(state)).block(pane_block(
         "Selection",
-        state.focused_pane == FocusedPane::Details,
+        state.focused_pane == FocusedPane::Selection,
     ));
     let targets = Paragraph::new(targets_text(state)).block(pane_block(
         "Apply To",
-        state.focused_pane == FocusedPane::Targets,
+        state.focused_pane == FocusedPane::ApplyTo,
     ));
 
     frame.render_widget(providers, panes_layout[0]);
@@ -107,7 +107,7 @@ fn providers_text(state: &AppState) -> String {
         .join("\n")
 }
 
-fn details_text(state: &AppState) -> String {
+fn selection_text(state: &AppState) -> String {
     let Some(provider) = state.selected_provider() else {
         return "Select a provider.".into();
     };
@@ -119,7 +119,8 @@ fn details_text(state: &AppState) -> String {
     ];
 
     if provider.api_keys.is_empty() {
-        lines.push("  No API key, press +".into());
+        let cursor = if state.detail_index() == 0 { ">" } else { " " };
+        lines.push(format!("{cursor} Add API key (+)"));
     } else {
         for (index, key) in provider.api_keys.iter().enumerate() {
             let cursor = if state.detail_index() == index {
@@ -144,16 +145,26 @@ fn details_text(state: &AppState) -> String {
     lines.push(String::new());
     lines.push("Model:".into());
     let key_count = provider.api_keys.len();
+    let model_start_index = if provider.api_keys.is_empty() {
+        1
+    } else {
+        key_count
+    };
     let cached_models = provider
         .models_cache
         .as_ref()
         .map(|cache| cache.models.as_slice())
         .unwrap_or(&[]);
     if cached_models.is_empty() && provider.manual_models.is_empty() {
-        lines.push("  No model, press r or m".into());
+        let cursor = if state.detail_index() == model_start_index {
+            ">"
+        } else {
+            " "
+        };
+        lines.push(format!("{cursor} Add model (m)"));
     } else {
         for (index, model) in cached_models.iter().enumerate() {
-            let detail_index = key_count + index;
+            let detail_index = model_start_index + index;
             let cursor = if state.detail_index() == detail_index {
                 ">"
             } else {
@@ -168,7 +179,7 @@ fn details_text(state: &AppState) -> String {
             lines.push(format!("{cursor}{active_model} {model}"));
         }
         for (index, model) in provider.manual_models.iter().enumerate() {
-            let detail_index = key_count + cached_models.len() + index;
+            let detail_index = model_start_index + cached_models.len() + index;
             let cursor = if state.detail_index() == detail_index {
                 ">"
             } else {
@@ -221,24 +232,19 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             };
             let mut lines = vec![
                 format!(
-                    "{} id: {}",
-                    field_cursor(form.current_field == 0),
-                    form.id.as_str()
-                ),
-                format!(
                     "{} name: {}",
-                    field_cursor(form.current_field == 1),
+                    field_cursor(form.current_field == 0),
                     form.name.as_str()
                 ),
                 format!(
                     "{} base_url: {}",
-                    field_cursor(form.current_field == 2),
+                    field_cursor(form.current_field == 1),
                     form.base_url.as_str()
                 ),
                 format!(
-                    "{} enabled: {}",
-                    field_cursor(form.current_field == 3),
-                    form.enabled.as_str()
+                    "{} model: {}",
+                    field_cursor(form.current_field == 2),
+                    form.model.as_str()
                 ),
                 String::new(),
                 "Tab/Shift+Tab switch field, Enter save, Esc cancel".into(),
@@ -426,7 +432,7 @@ mod tests {
         ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
     };
 
-    use super::{details_text, providers_text, targets_text};
+    use super::{providers_text, selection_text, targets_text};
     use crate::app::AppState;
 
     #[test]
@@ -444,7 +450,7 @@ mod tests {
     fn selection_pane_shows_masked_key_and_hides_cache_metadata() {
         let state = AppState::from_config(PathBuf::from("config.toml"), sample_config());
 
-        let text = details_text(&state);
+        let text = selection_text(&state);
 
         assert!(text.contains("Provider: Provider"));
         assert!(text.contains("Base URL: https://example.com/v1"));
