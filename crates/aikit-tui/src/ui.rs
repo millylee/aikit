@@ -29,11 +29,11 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         state.focused_pane == FocusedPane::Providers,
     ));
     let details = Paragraph::new(details_text(state)).block(pane_block(
-        "Details",
+        "Selection",
         state.focused_pane == FocusedPane::Details,
     ));
     let targets = Paragraph::new(targets_text(state)).block(pane_block(
-        "Targets",
+        "Apply To",
         state.focused_pane == FocusedPane::Targets,
     ));
 
@@ -68,7 +68,7 @@ fn focused_pane_style() -> Style {
 
 fn pane_title(title: &str, focused: bool) -> String {
     if focused {
-        format!("> {title} ACTIVE")
+        format!("> {title}")
     } else {
         title.to_string()
     }
@@ -101,21 +101,7 @@ fn providers_text(state: &AppState) -> String {
             } else {
                 " "
             };
-            let enabled = if provider.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            };
-            let model_count = provider
-                .models_cache
-                .as_ref()
-                .map(|cache| cache.models.len())
-                .unwrap_or(0)
-                + provider.manual_models.len();
-            format!(
-                "{cursor}{active} {} ({enabled})\n  {} model(s)",
-                provider.name, model_count
-            )
+            format!("{cursor}{active} {}", provider.name)
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -123,17 +109,17 @@ fn providers_text(state: &AppState) -> String {
 
 fn details_text(state: &AppState) -> String {
     let Some(provider) = state.selected_provider() else {
-        return "Select a provider to view keys and cached models.".into();
+        return "Select a provider.".into();
     };
     let active = state.config.active_selection.as_ref();
     let mut lines = vec![
         format!("Provider: {}", provider.name),
         format!("Base URL: {}", provider.base_url),
-        "Keys:".into(),
+        "API Key:".into(),
     ];
 
     if provider.api_keys.is_empty() {
-        lines.push("  No API keys configured".into());
+        lines.push("  No API key, press +".into());
     } else {
         for (index, key) in provider.api_keys.iter().enumerate() {
             let cursor = if state.detail_index() == index {
@@ -147,11 +133,16 @@ fn details_text(state: &AppState) -> String {
                 })
                 .map(|_| "*")
                 .unwrap_or(" ");
-            lines.push(format!("{cursor}{active_key} {}", key.name));
+            lines.push(format!(
+                "{cursor}{active_key} {} ({})",
+                key.name,
+                mask_secret(&key.value)
+            ));
         }
     }
 
-    lines.push("Models:".into());
+    lines.push(String::new());
+    lines.push("Model:".into());
     let key_count = provider.api_keys.len();
     let cached_models = provider
         .models_cache
@@ -159,7 +150,7 @@ fn details_text(state: &AppState) -> String {
         .map(|cache| cache.models.as_slice())
         .unwrap_or(&[]);
     if cached_models.is_empty() && provider.manual_models.is_empty() {
-        lines.push("  No models; press r to refresh or m to add one.".into());
+        lines.push("  No model, press r or m".into());
     } else {
         for (index, model) in cached_models.iter().enumerate() {
             let detail_index = key_count + index;
@@ -189,13 +180,7 @@ fn details_text(state: &AppState) -> String {
                 })
                 .map(|_| "*")
                 .unwrap_or(" ");
-            lines.push(format!("{cursor}{active_model} {model} [manual]"));
-        }
-        if let Some(cache) = provider.models_cache.as_ref() {
-            lines.push(format!("Cache refreshed: {}", cache.refreshed_at));
-            if let Some(error) = &cache.last_error {
-                lines.push(format!("Last refresh error: {error}"));
-            }
+            lines.push(format!("{cursor}{active_model} {model}  manual"));
         }
     }
 
@@ -219,13 +204,7 @@ fn targets_text(state: &AppState) -> String {
                 " "
             };
             let enabled = if target.enabled { "[x]" } else { "[ ]" };
-            let path = target
-                .config_path
-                .as_ref()
-                .map(|path| path.display().to_string())
-                .unwrap_or_else(|| "default path".into());
-            let status = state.target_status(&target.id).unwrap_or("not applied");
-            format!("{cursor} {enabled} {}\n  {path}\n  {status}", target.id)
+            format!("{cursor} {enabled} {}", target.id)
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -436,5 +415,94 @@ fn import_source_name(source: ImportSource) -> &'static str {
         ImportSource::Claude => "claude",
         ImportSource::Gemini => "gemini",
         ImportSource::Codex => "codex",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use aikit_core::config::{
+        ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
+    };
+
+    use super::{details_text, providers_text, targets_text};
+    use crate::app::AppState;
+
+    #[test]
+    fn provider_pane_is_single_line_without_model_count() {
+        let state = AppState::from_config(PathBuf::from("config.toml"), sample_config());
+
+        let text = providers_text(&state);
+
+        assert!(text.contains("* Provider"));
+        assert!(!text.contains("model(s)"));
+        assert!(!text.contains("enabled"));
+    }
+
+    #[test]
+    fn selection_pane_shows_masked_key_and_hides_cache_metadata() {
+        let state = AppState::from_config(PathBuf::from("config.toml"), sample_config());
+
+        let text = details_text(&state);
+
+        assert!(text.contains("Provider: Provider"));
+        assert!(text.contains("Base URL: https://example.com/v1"));
+        assert!(text.contains("Key (sk-a...7890)"));
+        assert!(text.contains("manual-model  manual"));
+        assert!(!text.contains("Cache refreshed"));
+        assert!(!text.contains("Last refresh error"));
+    }
+
+    #[test]
+    fn targets_pane_only_shows_enabled_state_and_target_id() {
+        let state = AppState::from_config(PathBuf::from("config.toml"), sample_config());
+
+        let text = targets_text(&state);
+
+        assert!(text.contains("> [x] claude"));
+        assert!(text.contains("  [ ] gemini"));
+        assert!(!text.contains("default path"));
+        assert!(!text.contains("not applied"));
+    }
+
+    fn sample_config() -> AikitConfig {
+        AikitConfig {
+            providers: vec![ProviderConfig {
+                id: "provider".into(),
+                name: "Provider".into(),
+                base_url: "https://example.com/v1".into(),
+                enabled: true,
+                api_keys: vec![ApiKeyConfig {
+                    id: "key".into(),
+                    name: "Key".into(),
+                    value: "sk-abcdef1234567890".into(),
+                }],
+                manual_models: vec!["manual-model".into()],
+                models_cache: Some(ModelCache {
+                    refreshed_at: "2026-06-28T00:00:00Z".into(),
+                    models: vec!["cached-model".into()],
+                    last_error: Some("hidden".into()),
+                }),
+            }],
+            active_selection: Some(ActiveSelection {
+                provider_id: "provider".into(),
+                api_key_id: "key".into(),
+                model_id: "manual-model".into(),
+            }),
+            targets: vec![
+                TargetConfig {
+                    id: "claude".into(),
+                    enabled: true,
+                    config_path: None,
+                },
+                TargetConfig {
+                    id: "gemini".into(),
+                    enabled: false,
+                    config_path: None,
+                },
+            ],
+            ..AikitConfig::default()
+        }
     }
 }

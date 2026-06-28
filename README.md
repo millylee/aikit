@@ -86,11 +86,11 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 
 ### TUI Keys
 
-- `Tab`: switch between Providers, Details, and Targets panes.
-- `t`: jump focus to the Targets pane.
+- `Tab`: switch between Providers, Selection, and Apply To panes.
+- `t`: jump focus to the Apply To pane.
 - `Up` / `Down` or `k` / `j`: move selection in the focused pane.
 - `Enter`: activate the selected provider, API key, model, or toggle the selected target.
-- `Space`: toggle the selected target when the Targets pane is focused.
+- `Space`: toggle the selected target when the Apply To pane is focused.
 - `r`: refresh models for the selected provider using the selected API key.
 - `m`: add a manual model for the selected provider.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
