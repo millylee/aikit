@@ -96,6 +96,34 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                 }
                 AppAction::None
             }
+            KeyCode::Delete => {
+                if let Err(err) = state.modal_delete_field() {
+                    state.set_status(format!("Modal edit failed: {err}"));
+                }
+                AppAction::None
+            }
+            KeyCode::Left => {
+                state.modal_move_cursor_left();
+                AppAction::None
+            }
+            KeyCode::Right => {
+                state.modal_move_cursor_right();
+                AppAction::None
+            }
+            KeyCode::Home => {
+                state.modal_move_cursor_home();
+                AppAction::None
+            }
+            KeyCode::End => {
+                state.modal_move_cursor_end();
+                AppAction::None
+            }
+            KeyCode::Char('u') if key.modifiers == KeyModifiers::CONTROL => {
+                if let Err(err) = state.modal_clear_field() {
+                    state.set_status(format!("Modal edit failed: {err}"));
+                }
+                AppAction::None
+            }
             KeyCode::Char(ch) => {
                 if matches!(key.modifiers, KeyModifiers::NONE | KeyModifiers::SHIFT)
                     && !ch.is_control()

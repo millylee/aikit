@@ -91,6 +91,7 @@ pub enum ProviderFormMode {
 pub struct ProviderFormState {
     pub mode: ProviderFormMode,
     pub current_field: usize,
+    pub cursor: usize,
     pub id: String,
     pub name: String,
     pub base_url: String,
@@ -118,6 +119,7 @@ pub struct ApiKeyFormState {
     pub mode: ApiKeyFormMode,
     pub provider_id: String,
     pub current_field: usize,
+    pub cursor: usize,
     pub id: String,
     pub name: String,
     pub value: String,
@@ -127,6 +129,7 @@ pub struct ApiKeyFormState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelFormState {
     pub provider_id: String,
+    pub cursor: usize,
     pub model: String,
     pub validation_error: Option<String>,
 }
@@ -206,6 +209,7 @@ impl AppState {
         self.modal_state = ModalState::ProviderForm(ProviderFormState {
             mode: ProviderFormMode::Add,
             current_field: 0,
+            cursor: 0,
             id: String::new(),
             name: String::new(),
             base_url: String::new(),
@@ -224,6 +228,7 @@ impl AppState {
                 original_id: provider.id.clone(),
             },
             current_field: 0,
+            cursor: provider.name.chars().count(),
             id: provider.id.clone(),
             name: provider.name.clone(),
             base_url: provider.base_url.clone(),
@@ -243,6 +248,7 @@ impl AppState {
             mode: ApiKeyFormMode::Add,
             provider_id,
             current_field: 0,
+            cursor: 0,
             id: String::new(),
             name: String::new(),
             value: String::new(),
@@ -265,6 +271,7 @@ impl AppState {
             },
             provider_id: provider.id.clone(),
             current_field: 0,
+            cursor: key.name.chars().count(),
             id: key.id.clone(),
             name: key.name.clone(),
             value: key.value.clone(),
@@ -280,6 +287,7 @@ impl AppState {
             .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
         self.modal_state = ModalState::ModelForm(ModelFormState {
             provider_id,
+            cursor: 0,
             model: String::new(),
             validation_error: None,
         });
@@ -297,6 +305,7 @@ impl AppState {
             .to_string();
         self.modal_state = ModalState::ModelForm(ModelFormState {
             provider_id,
+            cursor: model.chars().count(),
             model,
             validation_error: None,
         });
@@ -569,6 +578,7 @@ impl AppState {
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
                 match field {
+                    "name" => form.name = value.into(),
                     "value" => form.value = value.into(),
                     other => {
                         return Err(AikitError::Provider(format!(
@@ -600,9 +610,11 @@ impl AppState {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
                 form.current_field = (form.current_field + 1) % 3;
+                form.cursor = provider_form_current_value(form).chars().count();
             }
             ModalState::ApiKeyForm(form) => {
-                form.current_field = 0;
+                form.current_field = (form.current_field + 1) % api_key_form_field_count(form);
+                form.cursor = api_key_form_current_value(form).chars().count();
             }
             _ => {}
         }
@@ -612,9 +624,12 @@ impl AppState {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
                 form.current_field = (form.current_field + 3 - 1) % 3;
+                form.cursor = provider_form_current_value(form).chars().count();
             }
             ModalState::ApiKeyForm(form) => {
-                form.current_field = 0;
+                let field_count = api_key_form_field_count(form);
+                form.current_field = (form.current_field + field_count - 1) % field_count;
+                form.cursor = api_key_form_current_value(form).chars().count();
             }
             _ => {}
         }
@@ -624,22 +639,21 @@ impl AppState {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
                 form.validation_error = None;
-                match form.current_field {
-                    0 => form.name.push(ch),
-                    1 => form.base_url.push(ch),
-                    2 => form.model.push(ch),
-                    _ => {}
-                }
+                let mut cursor = form.cursor;
+                insert_at_cursor(provider_form_current_value_mut(form), &mut cursor, ch);
+                form.cursor = cursor;
                 Ok(())
             }
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
-                form.value.push(ch);
+                let mut cursor = form.cursor;
+                insert_at_cursor(api_key_form_current_value_mut(form), &mut cursor, ch);
+                form.cursor = cursor;
                 Ok(())
             }
             ModalState::ModelForm(form) => {
                 form.validation_error = None;
-                form.model.push(ch);
+                insert_at_cursor(&mut form.model, &mut form.cursor, ch);
                 Ok(())
             }
             _ => Err(AikitError::Provider("no modal form is open".into())),
@@ -650,31 +664,97 @@ impl AppState {
         match &mut self.modal_state {
             ModalState::ProviderForm(form) => {
                 form.validation_error = None;
-                match form.current_field {
-                    0 => {
-                        form.name.pop();
-                    }
-                    1 => {
-                        form.base_url.pop();
-                    }
-                    2 => {
-                        form.model.pop();
-                    }
-                    _ => {}
-                }
+                let mut cursor = form.cursor;
+                backspace_at_cursor(provider_form_current_value_mut(form), &mut cursor);
+                form.cursor = cursor;
                 Ok(())
             }
             ModalState::ApiKeyForm(form) => {
                 form.validation_error = None;
-                form.value.pop();
+                let mut cursor = form.cursor;
+                backspace_at_cursor(api_key_form_current_value_mut(form), &mut cursor);
+                form.cursor = cursor;
                 Ok(())
             }
             ModalState::ModelForm(form) => {
                 form.validation_error = None;
-                form.model.pop();
+                backspace_at_cursor(&mut form.model, &mut form.cursor);
                 Ok(())
             }
             _ => Err(AikitError::Provider("no modal form is open".into())),
+        }
+    }
+
+    pub fn modal_delete_field(&mut self) -> Result<()> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.validation_error = None;
+                let cursor = form.cursor;
+                delete_at_cursor(provider_form_current_value_mut(form), cursor);
+                Ok(())
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.validation_error = None;
+                let cursor = form.cursor;
+                delete_at_cursor(api_key_form_current_value_mut(form), cursor);
+                Ok(())
+            }
+            ModalState::ModelForm(form) => {
+                form.validation_error = None;
+                delete_at_cursor(&mut form.model, form.cursor);
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("no modal form is open".into())),
+        }
+    }
+
+    pub fn modal_clear_field(&mut self) -> Result<()> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => {
+                form.validation_error = None;
+                provider_form_current_value_mut(form).clear();
+                form.cursor = 0;
+                Ok(())
+            }
+            ModalState::ApiKeyForm(form) => {
+                form.validation_error = None;
+                api_key_form_current_value_mut(form).clear();
+                form.cursor = 0;
+                Ok(())
+            }
+            ModalState::ModelForm(form) => {
+                form.validation_error = None;
+                form.model.clear();
+                form.cursor = 0;
+                Ok(())
+            }
+            _ => Err(AikitError::Provider("no modal form is open".into())),
+        }
+    }
+
+    pub fn modal_move_cursor_left(&mut self) {
+        if let Some(cursor) = self.modal_cursor_mut() {
+            *cursor = cursor.saturating_sub(1);
+        }
+    }
+
+    pub fn modal_move_cursor_right(&mut self) {
+        let len = self.modal_current_value_len();
+        if let Some(cursor) = self.modal_cursor_mut() {
+            *cursor = (*cursor + 1).min(len);
+        }
+    }
+
+    pub fn modal_move_cursor_home(&mut self) {
+        if let Some(cursor) = self.modal_cursor_mut() {
+            *cursor = 0;
+        }
+    }
+
+    pub fn modal_move_cursor_end(&mut self) {
+        let len = self.modal_current_value_len();
+        if let Some(cursor) = self.modal_cursor_mut() {
+            *cursor = len;
         }
     }
 
@@ -1145,7 +1225,12 @@ impl AppState {
                     .ok_or_else(|| {
                         AikitError::Provider(format!("api key not found: {original_id}"))
                     })?;
-                (key.id.clone(), key.name.clone())
+                let name = if form.name.trim().is_empty() {
+                    key.name.clone()
+                } else {
+                    form.name.trim().to_string()
+                };
+                (key.id.clone(), name)
             }
         };
         let mut next_config = self.config.clone();
@@ -1327,6 +1412,24 @@ impl AppState {
                 import_prompt: config.import_prompt.clone(),
             },
         )
+    }
+
+    fn modal_cursor_mut(&mut self) -> Option<&mut usize> {
+        match &mut self.modal_state {
+            ModalState::ProviderForm(form) => Some(&mut form.cursor),
+            ModalState::ApiKeyForm(form) => Some(&mut form.cursor),
+            ModalState::ModelForm(form) => Some(&mut form.cursor),
+            _ => None,
+        }
+    }
+
+    fn modal_current_value_len(&self) -> usize {
+        match &self.modal_state {
+            ModalState::ProviderForm(form) => provider_form_current_value(form).chars().count(),
+            ModalState::ApiKeyForm(form) => api_key_form_current_value(form).chars().count(),
+            ModalState::ModelForm(form) => form.model.chars().count(),
+            _ => 0,
+        }
     }
 }
 
@@ -1559,6 +1662,86 @@ fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
         }
         number += 1;
     }
+}
+
+fn api_key_form_field_count(form: &ApiKeyFormState) -> usize {
+    match form.mode {
+        ApiKeyFormMode::Add => 1,
+        ApiKeyFormMode::Edit { .. } => 2,
+    }
+}
+
+fn provider_form_current_value(form: &ProviderFormState) -> &str {
+    match form.current_field {
+        0 => &form.name,
+        1 => &form.base_url,
+        2 => &form.model,
+        _ => "",
+    }
+}
+
+fn provider_form_current_value_mut(form: &mut ProviderFormState) -> &mut String {
+    match form.current_field {
+        0 => &mut form.name,
+        1 => &mut form.base_url,
+        2 => &mut form.model,
+        _ => &mut form.model,
+    }
+}
+
+fn api_key_form_current_value(form: &ApiKeyFormState) -> &str {
+    match form.mode {
+        ApiKeyFormMode::Add => &form.value,
+        ApiKeyFormMode::Edit { .. } => match form.current_field {
+            0 => &form.name,
+            1 => &form.value,
+            _ => &form.value,
+        },
+    }
+}
+
+fn api_key_form_current_value_mut(form: &mut ApiKeyFormState) -> &mut String {
+    match form.mode {
+        ApiKeyFormMode::Add => &mut form.value,
+        ApiKeyFormMode::Edit { .. } => match form.current_field {
+            0 => &mut form.name,
+            1 => &mut form.value,
+            _ => &mut form.value,
+        },
+    }
+}
+
+fn insert_at_cursor(value: &mut String, cursor: &mut usize, ch: char) {
+    let byte_index = char_to_byte_index(value, *cursor);
+    value.insert(byte_index, ch);
+    *cursor += 1;
+}
+
+fn backspace_at_cursor(value: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        return;
+    }
+    let start = char_to_byte_index(value, *cursor - 1);
+    let end = char_to_byte_index(value, *cursor);
+    value.replace_range(start..end, "");
+    *cursor -= 1;
+}
+
+fn delete_at_cursor(value: &mut String, cursor: usize) {
+    if cursor >= value.chars().count() {
+        return;
+    }
+    let start = char_to_byte_index(value, cursor);
+    let end = char_to_byte_index(value, cursor + 1);
+    value.replace_range(start..end, "");
+}
+
+fn char_to_byte_index(value: &str, char_index: usize) -> usize {
+    value
+        .char_indices()
+        .map(|(index, _)| index)
+        .nth(char_index)
+        .unwrap_or(value.len())
 }
 
 fn next_provider_id(config: &AikitConfig, name: &str) -> String {

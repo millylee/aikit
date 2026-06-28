@@ -490,6 +490,56 @@ fn api_key_modal_save_adds_key_to_selected_provider() {
 }
 
 #[test]
+fn modal_input_editing_keys_apply_to_current_field() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig::default(),
+    );
+    state.open_add_provider_modal();
+
+    for ch in "OpenAI".chars() {
+        handle_key(&mut state, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+    }
+    handle_key(&mut state, KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    handle_key(&mut state, KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('U'), KeyModifiers::SHIFT),
+    );
+    handle_key(&mut state, KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT),
+    );
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+    );
+
+    match state.modal_state {
+        ModalState::ProviderForm(form) => {
+            assert_eq!(form.name, "");
+            assert_eq!(form.cursor, 0);
+        }
+        other => panic!("expected provider form, got {other:?}"),
+    }
+}
+
+#[test]
+fn api_key_edit_modal_can_rename_key() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+
+    state.open_edit_api_key_modal().unwrap();
+    state.set_modal_field("name", "Work Key").unwrap();
+    state.save_modal().unwrap();
+
+    assert_eq!(state.config.providers[0].api_keys[0].name, "Work Key");
+}
+
+#[test]
 fn model_modal_save_adds_manual_model_to_selected_provider() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),

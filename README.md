@@ -95,6 +95,7 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 - `m`: add a manual model for the selected provider.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
 - `q` / `Esc`: quit.
+- `Ctrl+U`: clear the current input.
 
 ## Development
 

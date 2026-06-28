@@ -1,6 +1,6 @@
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
 use aikit_core::import::{ImportCandidate, ImportSource};
@@ -241,22 +241,23 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             };
             let mut lines = vec![
                 format!(
-                    "{} name: {}",
+                    "{} name*: {}",
                     field_cursor(form.current_field == 0),
-                    form.name.as_str()
+                    input_box(form.name.as_str())
                 ),
                 format!(
-                    "{} base_url: {}",
+                    "{} base_url*: {}",
                     field_cursor(form.current_field == 1),
-                    form.base_url.as_str()
+                    input_box(form.base_url.as_str())
                 ),
                 format!(
-                    "{} model: {}",
+                    "{} model*: {}",
                     field_cursor(form.current_field == 2),
-                    form.model.as_str()
+                    input_box(form.model.as_str())
                 ),
                 String::new(),
-                "Tab/Shift+Tab switch field, Enter save, Esc cancel".into(),
+                "* required. Tab/Shift+Tab switch field.".into(),
+                "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
             ];
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
@@ -268,12 +269,29 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ApiKeyFormMode::Add => "Add API Key",
                 ApiKeyFormMode::Edit { .. } => "Edit API Key",
             };
-            let value = form.value.clone();
-            let mut lines = vec![
-                format!("{} value: {}", field_cursor(true), value),
-                String::new(),
-                "Enter save, Esc cancel".into(),
-            ];
+            let mut lines = match form.mode {
+                ApiKeyFormMode::Add => vec![
+                    format!("{} value*: {}", field_cursor(true), input_box(form.value.as_str())),
+                    String::new(),
+                    "* required. Left/Right/Home/End edit.".into(),
+                    "Ctrl+U clear, Enter save, Esc cancel.".into(),
+                ],
+                ApiKeyFormMode::Edit { .. } => vec![
+                    format!(
+                        "{} name*: {}",
+                        field_cursor(form.current_field == 0),
+                        input_box(form.name.as_str())
+                    ),
+                    format!(
+                        "{} value*: {}",
+                        field_cursor(form.current_field == 1),
+                        input_box(form.value.as_str())
+                    ),
+                    String::new(),
+                    "* required. Tab/Shift+Tab switch field.".into(),
+                    "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
+                ],
+            };
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
             }
@@ -281,9 +299,10 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
         }
         ModalState::ModelForm(form) => {
             let mut lines = vec![
-                format!("{} model: {}", field_cursor(true), form.model.as_str()),
+                format!("{} model*: {}", field_cursor(true), input_box(form.model.as_str())),
                 String::new(),
-                "Enter save, Esc cancel".into(),
+                "* required. Left/Right/Home/End edit.".into(),
+                "Ctrl+U clear, Enter save, Esc cancel.".into(),
             ];
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
@@ -365,7 +384,8 @@ fn render_modal_text(frame: &mut Frame, area: Rect, title: &str, text: String) {
     frame.render_widget(Clear, area);
     let widget = Paragraph::new(text)
         .block(Block::default().borders(Borders::ALL).title(title))
-        .alignment(Alignment::Left);
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false });
     frame.render_widget(widget, area);
 }
 
@@ -394,6 +414,10 @@ fn field_cursor(active: bool) -> &'static str {
     } else {
         " "
     }
+}
+
+fn input_box(value: &str) -> String {
+    format!("[ {value} ]")
 }
 
 fn mask_secret(value: &str) -> String {
