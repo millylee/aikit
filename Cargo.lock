@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "aikit-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "directories",
  "reqwest",
@@ -44,7 +44,7 @@ dependencies = [
 
 [[package]]
 name = "aikit-tui"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aikit-core",
  "color-eyre",
