@@ -215,10 +215,19 @@ fn targets_text(state: &AppState) -> String {
                 " "
             };
             let enabled = if target.enabled { "[x]" } else { "[ ]" };
-            format!("{cursor} {enabled} {}", target.id)
+            format!("{cursor} {enabled} {}", target_display_name(&target.id))
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn target_display_name(target_id: &str) -> &str {
+    match target_id {
+        "claude" => "Claude Code",
+        "gemini" => "Gemini CLI",
+        "codex" => "Codex CLI",
+        other => other,
+    }
 }
 
 fn render_modal(frame: &mut Frame, state: &AppState) {
@@ -466,8 +475,8 @@ mod tests {
 
         let text = targets_text(&state);
 
-        assert!(text.contains("> [x] claude"));
-        assert!(text.contains("  [ ] gemini"));
+        assert!(text.contains("> [x] Claude Code"));
+        assert!(text.contains("  [ ] Gemini CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
     }
