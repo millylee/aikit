@@ -498,10 +498,16 @@ fn modal_input_editing_keys_apply_to_current_field() {
     state.open_add_provider_modal();
 
     for ch in "OpenAI".chars() {
-        handle_key(&mut state, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        handle_key(
+            &mut state,
+            KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE),
+        );
     }
     handle_key(&mut state, KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-    handle_key(&mut state, KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE),
+    );
     handle_key(
         &mut state,
         KeyEvent::new(KeyCode::Char('U'), KeyModifiers::SHIFT),

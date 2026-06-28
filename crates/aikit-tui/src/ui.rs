@@ -271,7 +271,11 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             };
             let mut lines = match form.mode {
                 ApiKeyFormMode::Add => vec![
-                    format!("{} value*: {}", field_cursor(true), input_box(form.value.as_str())),
+                    format!(
+                        "{} value*: {}",
+                        field_cursor(true),
+                        input_box(form.value.as_str())
+                    ),
                     String::new(),
                     "* required. Left/Right/Home/End edit.".into(),
                     "Ctrl+U clear, Enter save, Esc cancel.".into(),
@@ -299,7 +303,11 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
         }
         ModalState::ModelForm(form) => {
             let mut lines = vec![
-                format!("{} model*: {}", field_cursor(true), input_box(form.model.as_str())),
+                format!(
+                    "{} model*: {}",
+                    field_cursor(true),
+                    input_box(form.model.as_str())
+                ),
                 String::new(),
                 "* required. Left/Right/Home/End edit.".into(),
                 "Ctrl+U clear, Enter save, Esc cancel.".into(),
