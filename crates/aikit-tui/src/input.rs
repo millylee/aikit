@@ -8,6 +8,7 @@ pub enum AppAction {
     Quit,
     RefreshModels,
     ApplySelection,
+    CheckUpdates,
 }
 
 pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
@@ -60,6 +61,16 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                     if let Err(err) = state.cancel_import_list() {
                         state.set_status(format!("Import failed: {err}"));
                     }
+                    AppAction::None
+                }
+                _ => AppAction::None,
+            };
+        }
+
+        if matches!(state.modal_state, ModalState::Shortcuts) {
+            return match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('?') => {
+                    state.cancel_modal();
                     AppAction::None
                 }
                 _ => AppAction::None,
@@ -174,6 +185,11 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             }
             AppAction::None
         }
+        (KeyCode::Char('?'), _) => {
+            state.open_shortcuts_modal();
+            AppAction::None
+        }
+        (KeyCode::Char('u'), _) => AppAction::CheckUpdates,
         (KeyCode::Char('x'), _) => {
             let result = if state.focused_pane == FocusedPane::Selection
                 && state.selection_item_is_api_key()

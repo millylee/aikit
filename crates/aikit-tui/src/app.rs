@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Deserialize;
+
 use aikit_core::{
     cache::refresh_models,
     config::{
@@ -46,6 +48,14 @@ pub struct AppState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateCheckOutcome {
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetStatus {
     pub target_id: String,
     pub message: String,
@@ -79,6 +89,7 @@ pub enum ModalState {
         warnings: Vec<String>,
         persist_skip: bool,
     },
+    Shortcuts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,6 +214,10 @@ impl AppState {
             self.modal_state,
             ModalState::ConfirmDeleteProvider { .. } | ModalState::ConfirmDeleteApiKey { .. }
         )
+    }
+
+    pub fn open_shortcuts_modal(&mut self) {
+        self.modal_state = ModalState::Shortcuts;
     }
 
     pub fn open_add_provider_modal(&mut self) {
@@ -939,6 +954,45 @@ impl AppState {
         Ok(outcome)
     }
 
+    pub async fn check_updates(
+        &self,
+        client: &reqwest::Client,
+        latest_release_url: &str,
+    ) -> Result<UpdateCheckOutcome> {
+        let release = client
+            .get(latest_release_url)
+            .header("User-Agent", "aikit")
+            .send()
+            .await
+            .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
+            .error_for_status()
+            .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
+            .json::<GithubLatestRelease>()
+            .await
+            .map_err(|err| AikitError::Provider(format!("update response parse failed: {err}")))?;
+        let latest_version = normalize_release_tag(&release.tag_name);
+        if latest_version.is_empty() {
+            return Err(AikitError::Provider(
+                "latest release does not include a tag_name".into(),
+            ));
+        }
+
+        let current_version = env!("CARGO_PKG_VERSION").to_string();
+        let update_available = version_is_newer(&latest_version, &current_version);
+        let message = if update_available {
+            format!("Update available: v{latest_version} (current v{current_version})")
+        } else {
+            format!("Already up to date: v{current_version}")
+        };
+
+        Ok(UpdateCheckOutcome {
+            current_version,
+            latest_version,
+            update_available,
+            message,
+        })
+    }
+
     pub fn apply_active_selection(&mut self) -> Result<AppCommandOutcome> {
         if let Some(message) = self.apply_blocker_message() {
             let outcome = AppCommandOutcome::success(message, 0, 0);
@@ -1593,6 +1647,41 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
     );
     outcome.target_statuses = target_statuses;
     Ok(outcome)
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubLatestRelease {
+    tag_name: String,
+}
+
+fn normalize_release_tag(tag: &str) -> String {
+    tag.trim().trim_start_matches('v').to_string()
+}
+
+fn version_is_newer(candidate: &str, current: &str) -> bool {
+    compare_versions(candidate, current).is_gt()
+}
+
+fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
+    let left_parts = version_parts(left);
+    let right_parts = version_parts(right);
+    let width = left_parts.len().max(right_parts.len());
+    for index in 0..width {
+        let left_part = left_parts.get(index).copied().unwrap_or(0);
+        let right_part = right_parts.get(index).copied().unwrap_or(0);
+        match left_part.cmp(&right_part) {
+            std::cmp::Ordering::Equal => {}
+            ordering => return ordering,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+fn version_parts(version: &str) -> Vec<u64> {
+    version
+        .split(['.', '-'])
+        .map(|part| part.parse::<u64>().unwrap_or(0))
+        .collect()
 }
 
 fn load_or_default(config_path: &Path) -> Result<AikitConfig> {

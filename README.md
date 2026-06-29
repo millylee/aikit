@@ -93,9 +93,22 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 - `e`: edit the current provider in Providers, edit the current key/model in Selection, and show a hint in Apply To.
 - `r`: refresh models for the selected provider using the selected API key.
 - `m`: add a manual model for the selected provider.
+- `?`: show shortcuts.
+- `u`: check GitHub Releases for updates.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
 - `q` / `Esc`: quit.
+
+The footer shows the current `aikit` version plus shortcut hints.
+
+Modal form keys:
+
+- `Tab` / `Shift+Tab`: switch input fields.
+- `Left` / `Right`: move within the current input.
+- `Home` / `End`: jump to the start or end of the current input.
+- `Backspace` / `Delete`: delete before or at the current input position.
 - `Ctrl+U`: clear the current input.
+- `Enter`: save the form.
+- `Esc`: cancel the form.
 
 ## Development
 

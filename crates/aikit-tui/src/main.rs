@@ -15,6 +15,8 @@ use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/millylee/aikit/releases/latest";
+
 struct TerminalGuard;
 
 impl TerminalGuard {
@@ -60,13 +62,15 @@ async fn main() -> Result<()> {
         }
     }
     let client = OpenAiCompatibleClient::new(reqwest::Client::new());
-    run_app(&mut terminal, &mut state, &client).await
+    let http_client = reqwest::Client::new();
+    run_app(&mut terminal, &mut state, &client, &http_client).await
 }
 
 async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     state: &mut AppState,
     client: &OpenAiCompatibleClient,
+    http_client: &reqwest::Client,
 ) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, state))?;
@@ -86,6 +90,13 @@ async fn run_app(
                             Ok(outcome) => state.set_status(outcome.message),
                             Err(err) => state.set_status(format!("Apply failed: {err}")),
                         },
+                        AppAction::CheckUpdates => {
+                            state.set_status("Checking for updates...");
+                            match state.check_updates(http_client, LATEST_RELEASE_URL).await {
+                                Ok(outcome) => state.set_status(outcome.message),
+                                Err(err) => state.set_status(format!("Update check failed: {err}")),
+                            }
+                        }
                     }
                 }
             }

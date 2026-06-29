@@ -41,8 +41,17 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     frame.render_widget(details, panes_layout[1]);
     frame.render_widget(targets, panes_layout[2]);
 
+    let footer_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(status_footer_hint().chars().count() as u16),
+        ])
+        .split(main_layout[1]);
     let status = Paragraph::new(state.status.as_str());
-    frame.render_widget(status, main_layout[1]);
+    let hint = Paragraph::new(status_footer_hint()).alignment(Alignment::Right);
+    frame.render_widget(status, footer_layout[0]);
+    frame.render_widget(hint, footer_layout[1]);
 
     render_modal(frame, state);
 }
@@ -385,6 +394,9 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             lines.push("Space toggle, Up/Down move, Enter import selected, Esc cancel".into());
             render_modal_text(frame, area, "Import Candidates", lines.join("\n"));
         }
+        ModalState::Shortcuts => {
+            render_modal_text(frame, area, "Shortcuts", shortcuts_text());
+        }
     }
 }
 
@@ -426,6 +438,44 @@ fn field_cursor(active: bool) -> &'static str {
 
 fn input_box(value: &str) -> String {
     format!("[ {value} ]")
+}
+
+fn status_footer_hint() -> String {
+    format!(
+        "aikit {} / [?] Shortcuts / [u] Update",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+fn shortcuts_text() -> String {
+    [
+        "Global:",
+        "  Tab: switch panes",
+        "  t: focus Apply To",
+        "  Up/Down or k/j: move selection",
+        "  Enter/Space: activate selected item or toggle selected target",
+        "  ?: show shortcuts",
+        "  u: check for updates",
+        "  q/Esc: quit",
+        "",
+        "Providers / Selection / Apply To:",
+        "  a: add provider",
+        "  +: add API key",
+        "  m: add manual model",
+        "  e: edit selected provider, API key, or model",
+        "  x: delete selected API key in Selection",
+        "  r: refresh models",
+        "  Ctrl+s: apply active selection to enabled targets",
+        "",
+        "Modal forms:",
+        "  Tab/Shift+Tab: switch input fields",
+        "  Left/Right/Home/End: move within input",
+        "  Backspace/Delete: delete before or at cursor",
+        "  Ctrl+U: clear current input",
+        "  Enter: save or confirm",
+        "  Esc: cancel",
+    ]
+    .join("\n")
 }
 
 fn mask_secret(value: &str) -> String {
@@ -473,7 +523,7 @@ mod tests {
         ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
     };
 
-    use super::{providers_text, selection_text, targets_text};
+    use super::{providers_text, selection_text, shortcuts_text, status_footer_hint, targets_text};
     use crate::app::AppState;
 
     #[test]
@@ -511,6 +561,24 @@ mod tests {
         assert!(text.contains("  [ ] Gemini CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
+    }
+
+    #[test]
+    fn footer_hint_shows_version_and_shortcut_prompts() {
+        let text = status_footer_hint();
+
+        assert!(text.contains(env!("CARGO_PKG_VERSION")));
+        assert!(text.contains("[?] Shortcuts"));
+        assert!(text.contains("[u] Update"));
+    }
+
+    #[test]
+    fn shortcuts_text_includes_update_and_modal_keys() {
+        let text = shortcuts_text();
+
+        assert!(text.contains("?: show shortcuts"));
+        assert!(text.contains("u: check for updates"));
+        assert!(text.contains("Ctrl+U: clear current input"));
     }
 
     fn sample_config() -> AikitConfig {

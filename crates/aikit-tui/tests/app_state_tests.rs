@@ -46,6 +46,31 @@ fn r_requests_model_refresh() {
 }
 
 #[test]
+fn question_mark_opens_shortcuts_modal() {
+    let mut state = AppState::default();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert_eq!(state.modal_state, ModalState::Shortcuts);
+}
+
+#[test]
+fn u_requests_update_check() {
+    let mut state = AppState::default();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::CheckUpdates);
+}
+
+#[test]
 fn m_opens_add_model_modal() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
@@ -59,6 +84,58 @@ fn m_opens_add_model_modal() {
 
     assert_eq!(action, AppAction::None);
     assert!(matches!(state.modal_state, ModalState::ModelForm(_)));
+}
+
+#[tokio::test]
+async fn check_updates_reports_available_release() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "tag_name": "v999.0.0"
+        })))
+        .mount(&server)
+        .await;
+
+    let state = AppState::default();
+    let client = reqwest::Client::new();
+    let outcome = state
+        .check_updates(
+            &client,
+            &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+        )
+        .await
+        .unwrap();
+
+    assert!(outcome.update_available);
+    assert_eq!(outcome.latest_version, "999.0.0");
+    assert!(outcome.message.contains("Update available"));
+}
+
+#[tokio::test]
+async fn check_updates_reports_current_version_up_to_date() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "tag_name": format!("v{}", env!("CARGO_PKG_VERSION"))
+        })))
+        .mount(&server)
+        .await;
+
+    let state = AppState::default();
+    let client = reqwest::Client::new();
+    let outcome = state
+        .check_updates(
+            &client,
+            &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+        )
+        .await
+        .unwrap();
+
+    assert!(!outcome.update_available);
+    assert_eq!(outcome.latest_version, env!("CARGO_PKG_VERSION"));
+    assert!(outcome.message.contains("Already up to date"));
 }
 
 #[test]
