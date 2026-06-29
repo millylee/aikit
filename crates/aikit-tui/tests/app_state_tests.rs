@@ -253,6 +253,26 @@ fn space_activates_current_item_without_toggling_unfocused_target() {
 }
 
 #[test]
+fn g_and_shift_g_jump_to_first_and_last_selection_item() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers[0].manual_models = vec!["model-a".into(), "model-b".into()];
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+    );
+    assert_eq!(state.selected_model(), Some("model-b"));
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.selected_key().unwrap().id, "key");
+}
+
+#[test]
 fn j_and_k_move_selection_in_focused_pane() {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.providers.push(ProviderConfig {
@@ -280,7 +300,33 @@ fn j_and_k_move_selection_in_focused_pane() {
 }
 
 #[test]
-fn t_focuses_targets_and_j_k_move_target_selection() {
+fn h_l_and_arrow_keys_move_focus_between_panes() {
+    let mut state = AppState::default();
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.focused_pane, FocusedPane::Selection);
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+    );
+    assert_eq!(state.focused_pane, FocusedPane::ApplyTo);
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+    );
+    assert_eq!(state.focused_pane, FocusedPane::Selection);
+
+    handle_key(&mut state, KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert_eq!(state.focused_pane, FocusedPane::Providers);
+}
+
+#[test]
+fn l_focuses_targets_and_j_k_move_target_selection() {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.targets.push(TargetConfig {
         id: "gemini".into(),
@@ -291,7 +337,11 @@ fn t_focuses_targets_and_j_k_move_target_selection() {
 
     handle_key(
         &mut state,
-        KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+    );
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
     );
     assert_eq!(state.focused_pane, FocusedPane::ApplyTo);
 
@@ -306,6 +356,18 @@ fn t_focuses_targets_and_j_k_move_target_selection() {
         KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
     );
     assert_eq!(state.selected_target().unwrap().id, "codex");
+}
+
+#[test]
+fn t_no_longer_focuses_apply_to() {
+    let mut state = AppState::default();
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.focused_pane, FocusedPane::Providers);
 }
 
 #[test]
@@ -563,6 +625,34 @@ fn api_key_modal_save_adds_key_to_selected_provider() {
 
     assert_eq!(state.config.providers[0].api_keys[0].id, "key-1");
     assert_eq!(state.config.providers[0].api_keys[0].name, "Key 1");
+    assert_eq!(state.config.providers[0].api_keys[0].value, "sk-test");
+}
+
+#[test]
+fn api_key_add_modal_uses_optional_name_when_present() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig {
+            providers: vec![ProviderConfig {
+                id: "provider".into(),
+                name: "Provider".into(),
+                base_url: "https://example.com/v1".into(),
+                enabled: true,
+                api_keys: vec![],
+                manual_models: Vec::new(),
+                models_cache: None,
+            }],
+            ..AikitConfig::default()
+        },
+    );
+
+    state.open_add_api_key_modal().unwrap();
+    state.set_modal_field("name", "Work").unwrap();
+    state.set_modal_field("value", "sk-test").unwrap();
+    state.save_modal().unwrap();
+
+    assert_eq!(state.config.providers[0].api_keys[0].id, "key-1");
+    assert_eq!(state.config.providers[0].api_keys[0].name, "Work");
     assert_eq!(state.config.providers[0].api_keys[0].value, "sk-test");
 }
 

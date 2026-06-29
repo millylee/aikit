@@ -64,7 +64,7 @@ Provider management keys in the main TUI:
 - `a`: add provider.
 - `e`: edit selected provider.
 - `d`: delete selected provider (with confirmation).
-- `+`: add API key to selected provider. The form only asks for the key value; `aikit` generates the internal key id and display name.
+- `+`: add API key to selected provider. The form accepts an optional display name and a required key value; `aikit` generates the internal key id.
 - `x`: delete selected API key (with confirmation).
 - `m`: manually add a model to the selected provider.
 
@@ -86,9 +86,10 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 
 ### TUI Keys
 
-- `Tab`: switch between Providers, Selection, and Apply To panes.
-- `t`: jump focus to the Apply To pane.
+- `Tab` or `Right` / `l`: switch to the next pane.
+- `Left` / `h`: switch to the previous pane.
 - `Up` / `Down` or `k` / `j`: move selection in the focused pane.
+- `g` / `G`: jump to the first or last item in the focused pane.
 - `Enter` / `Space`: activate the selected provider, API key, model, or toggle the selected target.
 - `e`: edit the current provider in Providers, edit the current key/model in Selection, and show a hint in Apply To.
 - `r`: refresh models for the selected provider using the selected API key.

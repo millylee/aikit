@@ -201,6 +201,14 @@ impl AppState {
         };
     }
 
+    pub fn focus_previous_pane(&mut self) {
+        self.focused_pane = match self.focused_pane {
+            FocusedPane::Providers => FocusedPane::ApplyTo,
+            FocusedPane::Selection => FocusedPane::Providers,
+            FocusedPane::ApplyTo => FocusedPane::Selection,
+        };
+    }
+
     pub fn set_status(&mut self, message: impl Into<String>) {
         self.status = message.into();
     }
@@ -628,7 +636,7 @@ impl AppState {
                 form.cursor = provider_form_current_value(form).chars().count();
             }
             ModalState::ApiKeyForm(form) => {
-                form.current_field = (form.current_field + 1) % api_key_form_field_count(form);
+                form.current_field = (form.current_field + 1) % api_key_form_field_count();
                 form.cursor = api_key_form_current_value(form).chars().count();
             }
             _ => {}
@@ -642,7 +650,7 @@ impl AppState {
                 form.cursor = provider_form_current_value(form).chars().count();
             }
             ModalState::ApiKeyForm(form) => {
-                let field_count = api_key_form_field_count(form);
+                let field_count = api_key_form_field_count();
                 form.current_field = (form.current_field + field_count - 1) % field_count;
                 form.cursor = api_key_form_current_value(form).chars().count();
             }
@@ -887,6 +895,47 @@ impl AppState {
                 if !self.config.targets.is_empty() {
                     self.target_index = (self.target_index + self.config.targets.len() - 1)
                         % self.config.targets.len();
+                }
+            }
+        }
+    }
+
+    pub fn select_first(&mut self) {
+        match self.focused_pane {
+            FocusedPane::Providers => {
+                if !self.config.providers.is_empty() {
+                    self.provider_index = 0;
+                    self.sync_provider_children();
+                }
+            }
+            FocusedPane::Selection => {
+                self.detail_index = 0;
+                self.apply_selection_index();
+            }
+            FocusedPane::ApplyTo => {
+                self.target_index = 0;
+            }
+        }
+    }
+
+    pub fn select_last(&mut self) {
+        match self.focused_pane {
+            FocusedPane::Providers => {
+                if !self.config.providers.is_empty() {
+                    self.provider_index = self.config.providers.len() - 1;
+                    self.sync_provider_children();
+                }
+            }
+            FocusedPane::Selection => {
+                let count = self.selection_item_count();
+                if count > 0 {
+                    self.detail_index = count - 1;
+                    self.apply_selection_index();
+                }
+            }
+            FocusedPane::ApplyTo => {
+                if !self.config.targets.is_empty() {
+                    self.target_index = self.config.targets.len() - 1;
                 }
             }
         }
@@ -1262,7 +1311,13 @@ impl AppState {
                     .ok_or_else(|| {
                         AikitError::Provider(format!("provider not found: {}", form.provider_id))
                     })?;
-                next_api_key_identity(provider)
+                let (key_id, generated_name) = next_api_key_identity(provider);
+                let key_name = if form.name.trim().is_empty() {
+                    generated_name
+                } else {
+                    form.name.trim().to_string()
+                };
+                (key_id, key_name)
             }
             ApiKeyFormMode::Edit { original_id } => {
                 let key = self
@@ -1753,11 +1808,8 @@ fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
     }
 }
 
-fn api_key_form_field_count(form: &ApiKeyFormState) -> usize {
-    match form.mode {
-        ApiKeyFormMode::Add => 1,
-        ApiKeyFormMode::Edit { .. } => 2,
-    }
+fn api_key_form_field_count() -> usize {
+    2
 }
 
 fn provider_form_current_value(form: &ProviderFormState) -> &str {
@@ -1779,24 +1831,18 @@ fn provider_form_current_value_mut(form: &mut ProviderFormState) -> &mut String 
 }
 
 fn api_key_form_current_value(form: &ApiKeyFormState) -> &str {
-    match form.mode {
-        ApiKeyFormMode::Add => &form.value,
-        ApiKeyFormMode::Edit { .. } => match form.current_field {
-            0 => &form.name,
-            1 => &form.value,
-            _ => &form.value,
-        },
+    match form.current_field {
+        0 => &form.name,
+        1 => &form.value,
+        _ => &form.value,
     }
 }
 
 fn api_key_form_current_value_mut(form: &mut ApiKeyFormState) -> &mut String {
-    match form.mode {
-        ApiKeyFormMode::Add => &mut form.value,
-        ApiKeyFormMode::Edit { .. } => match form.current_field {
-            0 => &mut form.name,
-            1 => &mut form.value,
-            _ => &mut form.value,
-        },
+    match form.current_field {
+        0 => &mut form.name,
+        1 => &mut form.value,
+        _ => &mut form.value,
     }
 }
 

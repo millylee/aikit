@@ -28,7 +28,11 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         "Providers",
         state.focused_pane == FocusedPane::Providers,
     ));
-    let details = Paragraph::new(selection_text(state)).block(pane_block(
+    let details = Paragraph::new(selection_text_for_height(
+        state,
+        panes_layout[1].height.saturating_sub(2) as usize,
+    ))
+    .block(pane_block(
         "Selection",
         state.focused_pane == FocusedPane::Selection,
     ));
@@ -116,9 +120,27 @@ fn providers_text(state: &AppState) -> String {
         .join("\n")
 }
 
+#[cfg(test)]
 fn selection_text(state: &AppState) -> String {
+    selection_lines(state).lines.join("\n")
+}
+
+fn selection_text_for_height(state: &AppState, visible_rows: usize) -> String {
+    let selection = selection_lines(state);
+    visible_selection_lines(selection.lines, selection.selected_line_index, visible_rows).join("\n")
+}
+
+struct SelectionLines {
+    lines: Vec<String>,
+    selected_line_index: Option<usize>,
+}
+
+fn selection_lines(state: &AppState) -> SelectionLines {
     let Some(provider) = state.selected_provider() else {
-        return "Select a provider.".into();
+        return SelectionLines {
+            lines: vec!["Select a provider.".into()],
+            selected_line_index: None,
+        };
     };
     let active = state.config.active_selection.as_ref();
     let mut lines = vec![
@@ -126,9 +148,13 @@ fn selection_text(state: &AppState) -> String {
         format!("Base URL: {}", provider.base_url),
         "API Key:".into(),
     ];
+    let mut selected_line_index = None;
 
     if provider.api_keys.is_empty() {
         let cursor = if state.detail_index() == 0 { ">" } else { " " };
+        if state.detail_index() == 0 {
+            selected_line_index = Some(lines.len());
+        }
         lines.push(format!("{cursor} Add API key (+)"));
     } else {
         for (index, key) in provider.api_keys.iter().enumerate() {
@@ -137,6 +163,9 @@ fn selection_text(state: &AppState) -> String {
             } else {
                 " "
             };
+            if state.detail_index() == index {
+                selected_line_index = Some(lines.len());
+            }
             let active_key = active
                 .filter(|selection| {
                     selection.provider_id == provider.id && selection.api_key_id == key.id
@@ -170,6 +199,9 @@ fn selection_text(state: &AppState) -> String {
         } else {
             " "
         };
+        if state.detail_index() == model_start_index {
+            selected_line_index = Some(lines.len());
+        }
         lines.push(format!("{cursor} Add model (m)"));
     } else {
         for (index, model) in cached_models.iter().enumerate() {
@@ -179,6 +211,9 @@ fn selection_text(state: &AppState) -> String {
             } else {
                 " "
             };
+            if state.detail_index() == detail_index {
+                selected_line_index = Some(lines.len());
+            }
             let active_model = active
                 .filter(|selection| {
                     selection.provider_id == provider.id && selection.model_id == *model
@@ -194,6 +229,9 @@ fn selection_text(state: &AppState) -> String {
             } else {
                 " "
             };
+            if state.detail_index() == detail_index {
+                selected_line_index = Some(lines.len());
+            }
             let active_model = active
                 .filter(|selection| {
                     selection.provider_id == provider.id && selection.model_id == *model
@@ -204,7 +242,42 @@ fn selection_text(state: &AppState) -> String {
         }
     }
 
-    lines.join("\n")
+    SelectionLines {
+        lines,
+        selected_line_index,
+    }
+}
+
+fn visible_selection_lines(
+    lines: Vec<String>,
+    selected_line_index: Option<usize>,
+    visible_rows: usize,
+) -> Vec<String> {
+    if visible_rows == 0 {
+        return Vec::new();
+    }
+    if lines.len() <= visible_rows {
+        return lines;
+    }
+
+    let total_len = lines.len();
+    let selected_line_index = selected_line_index.unwrap_or(0).min(lines.len() - 1);
+    let start = selected_line_index
+        .saturating_sub(visible_rows.saturating_sub(1))
+        .min(lines.len().saturating_sub(visible_rows));
+    let mut visible = lines
+        .into_iter()
+        .skip(start)
+        .take(visible_rows)
+        .collect::<Vec<_>>();
+    if start > 0 {
+        visible[0] = format!("... {}", visible[0]);
+    }
+    if start + visible_rows < total_len {
+        let last_index = visible.len() - 1;
+        visible[last_index] = format!("{} ...", visible[last_index]);
+    }
+    visible
 }
 
 fn targets_text(state: &AppState) -> String {
@@ -249,21 +322,14 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ProviderFormMode::Edit { .. } => "Edit Provider",
             };
             let mut lines = vec![
-                format!(
-                    "{} name*: {}",
-                    field_cursor(form.current_field == 0),
-                    input_box(form.name.as_str())
+                modal_field_line(form.current_field == 0, "name", true, form.name.as_str()),
+                modal_field_line(
+                    form.current_field == 1,
+                    "base_url",
+                    true,
+                    form.base_url.as_str(),
                 ),
-                format!(
-                    "{} base_url*: {}",
-                    field_cursor(form.current_field == 1),
-                    input_box(form.base_url.as_str())
-                ),
-                format!(
-                    "{} model*: {}",
-                    field_cursor(form.current_field == 2),
-                    input_box(form.model.as_str())
-                ),
+                modal_field_line(form.current_field == 2, "model", true, form.model.as_str()),
                 String::new(),
                 "* required. Tab/Shift+Tab switch field.".into(),
                 "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
@@ -280,26 +346,16 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             };
             let mut lines = match form.mode {
                 ApiKeyFormMode::Add => vec![
-                    format!(
-                        "{} value*: {}",
-                        field_cursor(true),
-                        input_box(form.value.as_str())
-                    ),
+                    modal_field_line(form.current_field == 0, "name", false, form.name.as_str()),
+                    modal_field_line(form.current_field == 1, "value", true, form.value.as_str()),
                     String::new(),
-                    "* required. Left/Right/Home/End edit.".into(),
+                    "name is optional. value is required.".into(),
+                    "Tab/Shift+Tab switch field. Left/Right/Home/End edit.".into(),
                     "Ctrl+U clear, Enter save, Esc cancel.".into(),
                 ],
                 ApiKeyFormMode::Edit { .. } => vec![
-                    format!(
-                        "{} name*: {}",
-                        field_cursor(form.current_field == 0),
-                        input_box(form.name.as_str())
-                    ),
-                    format!(
-                        "{} value*: {}",
-                        field_cursor(form.current_field == 1),
-                        input_box(form.value.as_str())
-                    ),
+                    modal_field_line(form.current_field == 0, "name", true, form.name.as_str()),
+                    modal_field_line(form.current_field == 1, "value", true, form.value.as_str()),
                     String::new(),
                     "* required. Tab/Shift+Tab switch field.".into(),
                     "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
@@ -312,11 +368,7 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
         }
         ModalState::ModelForm(form) => {
             let mut lines = vec![
-                format!(
-                    "{} model*: {}",
-                    field_cursor(true),
-                    input_box(form.model.as_str())
-                ),
+                modal_field_line(true, "model", true, form.model.as_str()),
                 String::new(),
                 "* required. Left/Right/Home/End edit.".into(),
                 "Ctrl+U clear, Enter save, Esc cancel.".into(),
@@ -436,6 +488,15 @@ fn field_cursor(active: bool) -> &'static str {
     }
 }
 
+fn modal_field_line(active: bool, label: &str, required: bool, value: &str) -> String {
+    let required_mark = if required { "*" } else { "" };
+    format!(
+        "{} {label}{required_mark}: {}",
+        field_cursor(active),
+        input_box(value)
+    )
+}
+
 fn input_box(value: &str) -> String {
     format!("[ {value} ]")
 }
@@ -450,9 +511,10 @@ fn status_footer_hint() -> String {
 fn shortcuts_text() -> String {
     [
         "Global:",
-        "  Tab: switch panes",
-        "  t: focus Apply To",
+        "  Tab or Right/l: next pane",
+        "  Left/h: previous pane",
         "  Up/Down or k/j: move selection",
+        "  g/G: jump to first/last item",
         "  Enter/Space: activate selected item or toggle selected target",
         "  ?: show shortcuts",
         "  u: check for updates",
@@ -523,8 +585,11 @@ mod tests {
         ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
     };
 
-    use super::{providers_text, selection_text, shortcuts_text, status_footer_hint, targets_text};
-    use crate::app::AppState;
+    use super::{
+        providers_text, selection_text, selection_text_for_height, shortcuts_text,
+        status_footer_hint, targets_text,
+    };
+    use crate::app::{AppState, FocusedPane};
 
     #[test]
     fn provider_pane_is_single_line_without_model_count() {
@@ -549,6 +614,33 @@ mod tests {
         assert!(text.contains("manual-model  manual"));
         assert!(!text.contains("Cache refreshed"));
         assert!(!text.contains("Last refresh error"));
+    }
+
+    #[test]
+    fn selection_pane_scrolls_to_keep_selected_model_visible() {
+        let mut config = sample_config();
+        config.providers[0].models_cache = Some(ModelCache {
+            refreshed_at: "2026-06-28T00:00:00Z".into(),
+            models: (0..30).map(|index| format!("model-{index:02}")).collect(),
+            last_error: None,
+        });
+        config.providers[0].manual_models.clear();
+        config.active_selection = Some(ActiveSelection {
+            provider_id: "provider".into(),
+            api_key_id: "key".into(),
+            model_id: "model-25".into(),
+        });
+        let mut state = AppState::from_config(PathBuf::from("config.toml"), config);
+        state.focused_pane = FocusedPane::Selection;
+        for _ in 0..26 {
+            state.select_next();
+        }
+
+        let text = selection_text_for_height(&state, 8);
+
+        assert!(text.contains("model-25"));
+        assert!(!text.contains("model-00"));
+        assert!(text.contains("..."));
     }
 
     #[test]

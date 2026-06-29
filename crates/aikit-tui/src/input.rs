@@ -27,7 +27,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                     }
                     AppAction::None
                 }
-                KeyCode::Tab | KeyCode::Char('l') => {
+                KeyCode::Tab => {
                     if let Err(err) = state.open_import_list() {
                         state.set_status(format!("Import failed: {err}"));
                     }
@@ -208,8 +208,12 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             state.focus_next_pane();
             AppAction::None
         }
-        (KeyCode::Char('t'), _) => {
-            state.focused_pane = FocusedPane::ApplyTo;
+        (KeyCode::Right, _) | (KeyCode::Char('l'), _) => {
+            state.focus_next_pane();
+            AppAction::None
+        }
+        (KeyCode::Left, _) | (KeyCode::Char('h'), _) => {
+            state.focus_previous_pane();
             AppAction::None
         }
         (KeyCode::Down, _) | (KeyCode::Char('j'), _) => {
@@ -218,6 +222,14 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
         }
         (KeyCode::Up, _) | (KeyCode::Char('k'), _) => {
             state.select_previous();
+            AppAction::None
+        }
+        (KeyCode::Char('g'), _) => {
+            state.select_first();
+            AppAction::None
+        }
+        (KeyCode::Char('G'), _) => {
+            state.select_last();
             AppAction::None
         }
         (KeyCode::Enter, _) => {
