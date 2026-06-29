@@ -657,6 +657,27 @@ fn api_key_add_modal_uses_optional_name_when_present() {
 }
 
 #[test]
+fn modal_up_down_switches_provider_form_fields() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        AikitConfig::default(),
+    );
+    state.open_add_provider_modal();
+
+    handle_key(&mut state, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    match &state.modal_state {
+        ModalState::ProviderForm(form) => assert_eq!(form.current_field, 1),
+        other => panic!("expected provider form, got {other:?}"),
+    }
+
+    handle_key(&mut state, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    match &state.modal_state {
+        ModalState::ProviderForm(form) => assert_eq!(form.current_field, 0),
+        other => panic!("expected provider form, got {other:?}"),
+    }
+}
+
+#[test]
 fn modal_input_editing_keys_apply_to_current_field() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),

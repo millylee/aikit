@@ -90,6 +90,14 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                 state.modal_previous_field();
                 AppAction::None
             }
+            KeyCode::Down => {
+                state.modal_next_field();
+                AppAction::None
+            }
+            KeyCode::Up => {
+                state.modal_previous_field();
+                AppAction::None
+            }
             KeyCode::Enter => {
                 let result = if state.modal_is_confirmation() {
                     state.confirm_modal()

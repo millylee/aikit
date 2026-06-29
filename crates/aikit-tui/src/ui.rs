@@ -321,19 +321,29 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ProviderFormMode::Add => "Add Provider",
                 ProviderFormMode::Edit { .. } => "Edit Provider",
             };
-            let mut lines = vec![
-                modal_field_line(form.current_field == 0, "name", true, form.name.as_str()),
-                modal_field_line(
-                    form.current_field == 1,
-                    "base_url",
-                    true,
-                    form.base_url.as_str(),
-                ),
-                modal_field_line(form.current_field == 2, "model", true, form.model.as_str()),
-                String::new(),
-                "* required. Tab/Shift+Tab switch field.".into(),
-                "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
-            ];
+            let mut lines = modal_form_field_lines(&[
+                ModalField {
+                    active: form.current_field == 0,
+                    label: "name",
+                    required: true,
+                    value: form.name.as_str(),
+                },
+                ModalField {
+                    active: form.current_field == 1,
+                    label: "base_url",
+                    required: true,
+                    value: form.base_url.as_str(),
+                },
+                ModalField {
+                    active: form.current_field == 2,
+                    label: "model",
+                    required: true,
+                    value: form.model.as_str(),
+                },
+            ]);
+            lines.push(String::new());
+            lines.push("* required. Tab/Up/Down switch field.".into());
+            lines.push("Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into());
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
             }
@@ -345,21 +355,49 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ApiKeyFormMode::Edit { .. } => "Edit API Key",
             };
             let mut lines = match form.mode {
-                ApiKeyFormMode::Add => vec![
-                    modal_field_line(form.current_field == 0, "name", false, form.name.as_str()),
-                    modal_field_line(form.current_field == 1, "value", true, form.value.as_str()),
-                    String::new(),
-                    "name is optional. value is required.".into(),
-                    "Tab/Shift+Tab switch field. Left/Right/Home/End edit.".into(),
-                    "Ctrl+U clear, Enter save, Esc cancel.".into(),
-                ],
-                ApiKeyFormMode::Edit { .. } => vec![
-                    modal_field_line(form.current_field == 0, "name", true, form.name.as_str()),
-                    modal_field_line(form.current_field == 1, "value", true, form.value.as_str()),
-                    String::new(),
-                    "* required. Tab/Shift+Tab switch field.".into(),
-                    "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
-                ],
+                ApiKeyFormMode::Add => {
+                    let mut field_lines = modal_form_field_lines(&[
+                        ModalField {
+                            active: form.current_field == 0,
+                            label: "name",
+                            required: false,
+                            value: form.name.as_str(),
+                        },
+                        ModalField {
+                            active: form.current_field == 1,
+                            label: "value",
+                            required: true,
+                            value: form.value.as_str(),
+                        },
+                    ]);
+                    field_lines.push(String::new());
+                    field_lines.push("name is optional. value is required.".into());
+                    field_lines.push("Tab/Up/Down switch field. Left/Right/Home/End edit.".into());
+                    field_lines.push("Ctrl+U clear, Enter save, Esc cancel.".into());
+                    field_lines
+                }
+                ApiKeyFormMode::Edit { .. } => {
+                    let mut field_lines = modal_form_field_lines(&[
+                        ModalField {
+                            active: form.current_field == 0,
+                            label: "name",
+                            required: true,
+                            value: form.name.as_str(),
+                        },
+                        ModalField {
+                            active: form.current_field == 1,
+                            label: "value",
+                            required: true,
+                            value: form.value.as_str(),
+                        },
+                    ]);
+                    field_lines.push(String::new());
+                    field_lines.push("* required. Tab/Up/Down switch field.".into());
+                    field_lines.push(
+                        "Left/Right/Home/End edit, Ctrl+U clear, Enter save, Esc cancel.".into(),
+                    );
+                    field_lines
+                }
             };
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
@@ -367,12 +405,15 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             render_modal_text(frame, area, title, lines.join("\n"));
         }
         ModalState::ModelForm(form) => {
-            let mut lines = vec![
-                modal_field_line(true, "model", true, form.model.as_str()),
-                String::new(),
-                "* required. Left/Right/Home/End edit.".into(),
-                "Ctrl+U clear, Enter save, Esc cancel.".into(),
-            ];
+            let mut lines = modal_form_field_lines(&[ModalField {
+                active: true,
+                label: "model",
+                required: true,
+                value: form.model.as_str(),
+            }]);
+            lines.push(String::new());
+            lines.push("* required. Left/Right/Home/End edit.".into());
+            lines.push("Ctrl+U clear, Enter save, Esc cancel.".into());
             if let Some(error) = &form.validation_error {
                 lines.push(format!("Error: {error}"));
             }
@@ -488,12 +529,40 @@ fn field_cursor(active: bool) -> &'static str {
     }
 }
 
-fn modal_field_line(active: bool, label: &str, required: bool, value: &str) -> String {
-    let required_mark = if required { "*" } else { "" };
+struct ModalField<'a> {
+    active: bool,
+    label: &'a str,
+    required: bool,
+    value: &'a str,
+}
+
+fn modal_form_field_lines(fields: &[ModalField<'_>]) -> Vec<String> {
+    let label_width = fields
+        .iter()
+        .map(|field| field_label(field).len())
+        .max()
+        .unwrap_or(0);
+    fields
+        .iter()
+        .map(|field| modal_field_line(field, label_width))
+        .collect()
+}
+
+fn field_label(field: &ModalField<'_>) -> String {
+    if field.required {
+        format!("{}*", field.label)
+    } else {
+        field.label.to_string()
+    }
+}
+
+fn modal_field_line(field: &ModalField<'_>, label_width: usize) -> String {
     format!(
-        "{} {label}{required_mark}: {}",
-        field_cursor(active),
-        input_box(value)
+        "{} {:width$}: {}",
+        field_cursor(field.active),
+        field_label(field),
+        input_box(field.value),
+        width = label_width
     )
 }
 
@@ -530,7 +599,7 @@ fn shortcuts_text() -> String {
         "  Ctrl+s: apply active selection to enabled targets",
         "",
         "Modal forms:",
-        "  Tab/Shift+Tab: switch input fields",
+        "  Tab/Shift+Tab/Up/Down: switch input fields",
         "  Left/Right/Home/End: move within input",
         "  Backspace/Delete: delete before or at cursor",
         "  Ctrl+U: clear current input",
@@ -586,8 +655,8 @@ mod tests {
     };
 
     use super::{
-        providers_text, selection_text, selection_text_for_height, shortcuts_text,
-        status_footer_hint, targets_text,
+        modal_form_field_lines, providers_text, selection_text, selection_text_for_height,
+        shortcuts_text, status_footer_hint, targets_text, ModalField,
     };
     use crate::app::{AppState, FocusedPane};
 
@@ -654,6 +723,35 @@ mod tests {
         assert!(text.contains("  [ ] Gemini CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
+    }
+
+    #[test]
+    fn modal_form_field_lines_align_input_boxes() {
+        let lines = modal_form_field_lines(&[
+            ModalField {
+                active: true,
+                label: "name",
+                required: true,
+                value: "Anyrouter",
+            },
+            ModalField {
+                active: false,
+                label: "base_url",
+                required: true,
+                value: "https://example.com",
+            },
+            ModalField {
+                active: false,
+                label: "model",
+                required: true,
+                value: "model-1",
+            },
+        ]);
+
+        let bracket_positions: Vec<_> = lines.iter().map(|line| line.find('[').unwrap()).collect();
+        assert!(bracket_positions
+            .windows(2)
+            .all(|window| window[0] == window[1]));
     }
 
     #[test]

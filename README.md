@@ -103,7 +103,7 @@ The footer shows the current `aikit` version plus shortcut hints.
 
 Modal form keys:
 
-- `Tab` / `Shift+Tab`: switch input fields.
+- `Tab` / `Shift+Tab` / `Up` / `Down`: switch input fields.
 - `Left` / `Right`: move within the current input.
 - `Home` / `End`: jump to the start or end of the current input.
 - `Backspace` / `Delete`: delete before or at the current input position.
