@@ -650,6 +650,7 @@ mod tests {
         let text = targets_text(&state);
 
         assert!(text.contains("> [x] Claude Code"));
+        assert!(text.contains("  [ ] Codex CLI"));
         assert!(text.contains("  [ ] Gemini CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
@@ -701,6 +702,11 @@ mod tests {
                 TargetConfig {
                     id: "claude".into(),
                     enabled: true,
+                    config_path: None,
+                },
+                TargetConfig {
+                    id: "codex".into(),
+                    enabled: false,
                     config_path: None,
                 },
                 TargetConfig {

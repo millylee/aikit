@@ -95,17 +95,17 @@ impl Default for AikitConfig {
             targets: vec![
                 TargetConfig {
                     id: "claude".into(),
-                    enabled: true,
-                    config_path: None,
-                },
-                TargetConfig {
-                    id: "gemini".into(),
-                    enabled: true,
+                    enabled: false,
                     config_path: None,
                 },
                 TargetConfig {
                     id: "codex".into(),
-                    enabled: true,
+                    enabled: false,
+                    config_path: None,
+                },
+                TargetConfig {
+                    id: "gemini".into(),
+                    enabled: false,
                     config_path: None,
                 },
             ],

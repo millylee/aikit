@@ -9,7 +9,7 @@ It is built with [Ratatui](https://ratatui.rs/) and currently targets OpenAI-com
 - Manage multiple AI providers with `base_url` and multiple API keys.
 - Cache provider model lists locally, refresh them only on demand, and add manual models for proxy services.
 - Select a global provider + API key + model combination.
-- Apply the active selection to Claude Code, Gemini CLI, and Codex configs.
+- Apply the active selection to Claude Code, Codex CLI, and Gemini CLI configs.
 - Back up existing target config files before writing.
 
 ## Install
@@ -56,7 +56,7 @@ Runtime state is kept outside the main config:
 
 - `~/.aikit/state.toml`: import prompt state.
 - `~/.aikit/cache/models.json`: provider model cache.
-- `~/.aikit/backups/<target>/`: centralized backups for `aikit`, Claude Code, Gemini CLI, and Codex configs.
+- `~/.aikit/backups/<target>/`: centralized backups for `aikit`, Claude Code, Codex CLI, and Gemini CLI configs.
 - `~/.aikit/logs/backups.jsonl`: append-only backup index.
 
 Provider management keys in the main TUI:
@@ -71,7 +71,7 @@ Provider management keys in the main TUI:
 Import keys and behavior:
 
 - `i`: scan and import provider candidates.
-- On startup, if no providers are configured, `aikit` scans environment variables plus Claude Code, Gemini CLI, and Codex config files for import candidates.
+- On startup, if no providers are configured, `aikit` scans environment variables plus Claude Code, Codex CLI, and Gemini CLI config files for import candidates.
 - If import candidates are found, `aikit` shows an import prompt before changing config.
 - In the prompt, you can import all, skip, or open the selectable candidate list.
 - Missing or unparseable config files are soft-failed and shown as warnings; other import sources continue.
