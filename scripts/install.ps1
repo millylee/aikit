@@ -5,11 +5,17 @@ $Version = if ($env:AIKIT_VERSION) { $env:AIKIT_VERSION } else { "latest" }
 $BinDir = if ($env:AIKIT_BIN_DIR) { $env:AIKIT_BIN_DIR } else { Join-Path $HOME ".local\bin" }
 
 $Architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-if ($Architecture -ne [System.Runtime.InteropServices.Architecture]::X64) {
-    throw "Unsupported Windows architecture. aikit currently supports x64 Windows only."
+switch ($Architecture) {
+    ([System.Runtime.InteropServices.Architecture]::X64) {
+        $Archive = "aikit-x86_64-pc-windows-msvc.zip"
+    }
+    ([System.Runtime.InteropServices.Architecture]::Arm64) {
+        $Archive = "aikit-aarch64-pc-windows-msvc.zip"
+    }
+    default {
+        throw "Unsupported Windows architecture ($Architecture). aikit currently supports x64 and ARM64 Windows only."
+    }
 }
-
-$Archive = "aikit-x86_64-pc-windows-msvc.zip"
 
 function Test-PathEntry {
     param(

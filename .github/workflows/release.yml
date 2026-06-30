@@ -32,6 +32,10 @@ jobs:
             os: windows-latest
             archive_ext: zip
             binary: aikit.exe
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            archive_ext: zip
+            binary: aikit.exe
 
     steps:
       - uses: actions/checkout@v5
