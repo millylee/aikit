@@ -185,6 +185,26 @@ pub fn delete_api_key(config: &mut AikitConfig, provider_id: &str, key_id: &str)
     Ok(())
 }
 
+pub fn delete_model(config: &mut AikitConfig, provider_id: &str, model: &str) -> Result<()> {
+    let provider = provider_mut(config, provider_id)?;
+    let model_index = provider
+        .manual_models
+        .iter()
+        .position(|manual| manual == model)
+        .ok_or_else(|| AikitError::Provider(format!("model not found: {model}")))?;
+    provider.manual_models.remove(model_index);
+
+    if config
+        .active_selection
+        .as_ref()
+        .is_some_and(|active| active.provider_id == provider_id && active.model_id == model)
+    {
+        config.active_selection = None;
+    }
+
+    Ok(())
+}
+
 pub fn backup_config_file(path: &Path) -> Result<Option<PathBuf>> {
     backup_file_to_root("aikit", path, &aikit_dir_for_config(path))
 }

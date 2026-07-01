@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{AppState, FocusedPane, ModalState};
+use crate::app::{AppState, FocusedPane, ModalState, SelectionItem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppAction {
@@ -170,7 +170,26 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('d'), _) => {
-            if let Err(err) = state.open_delete_provider_confirmation() {
+            let result = match state.focused_pane {
+                FocusedPane::Providers => state.open_delete_provider_confirmation(),
+                FocusedPane::Selection => match state.selected_selection_item() {
+                    Some(SelectionItem::ApiKey(_)) => state.open_delete_api_key_confirmation(),
+                    Some(SelectionItem::Model(_)) => state.open_delete_model_confirmation(),
+                    Some(SelectionItem::AddApiKey | SelectionItem::AddModel) => {
+                        state.set_status("Nothing to delete on this row");
+                        Ok(())
+                    }
+                    None => {
+                        state.set_status("Select a key or model to delete");
+                        Ok(())
+                    }
+                },
+                FocusedPane::ApplyTo => {
+                    state.set_status("Nothing to delete in the Apply To pane");
+                    Ok(())
+                }
+            };
+            if let Err(err) = result {
                 state.set_status(format!("Open modal failed: {err}"));
             }
             AppAction::None
@@ -198,20 +217,6 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             AppAction::None
         }
         (KeyCode::Char('u'), _) => AppAction::CheckUpdates,
-        (KeyCode::Char('x'), _) => {
-            let result = if state.focused_pane == FocusedPane::Selection
-                && state.selection_item_is_api_key()
-            {
-                state.open_delete_api_key_confirmation()
-            } else {
-                state.set_status("Select an API key to delete");
-                Ok(())
-            };
-            if let Err(err) = result {
-                state.set_status(format!("Open modal failed: {err}"));
-            }
-            AppAction::None
-        }
         (KeyCode::Tab, _) => {
             state.focus_next_pane();
             AppAction::None

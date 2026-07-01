@@ -442,6 +442,16 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 ),
             );
         }
+        ModalState::ConfirmDeleteModel { provider_id, model } => {
+            render_modal_text(
+                frame,
+                area,
+                "Delete Model",
+                format!(
+                    "Delete model `{model}` from provider `{provider_id}`?\n\nEnter confirm, Esc cancel"
+                ),
+            );
+        }
         ModalState::ImportPrompt {
             candidates,
             warnings,
@@ -594,7 +604,7 @@ fn shortcuts_text() -> String {
         "  +: add API key",
         "  m: add manual model",
         "  e: edit selected provider, API key, or model",
-        "  x: delete selected API key in Selection",
+        "  d: delete selected provider, API key, or manual model",
         "  r: refresh models",
         "  Ctrl+s: apply active selection to enabled targets",
         "",

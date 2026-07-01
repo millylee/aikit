@@ -63,9 +63,8 @@ Provider management keys in the main TUI:
 
 - `a`: add provider.
 - `e`: edit selected provider.
-- `d`: delete selected provider (with confirmation).
+- `d`: delete selected provider, API key, or manual model (with confirmation).
 - `+`: add API key to selected provider. The form accepts an optional display name and a required key value; `aikit` generates the internal key id.
-- `x`: delete selected API key (with confirmation).
 - `m`: manually add a model to the selected provider.
 
 Import keys and behavior:

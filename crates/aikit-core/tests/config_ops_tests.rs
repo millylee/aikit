@@ -1,6 +1,9 @@
 use aikit_core::{
     config::{ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig},
-    config_ops::{add_provider, backup_config_file, delete_api_key, delete_provider, ProviderForm},
+    config_ops::{
+        add_provider, backup_config_file, delete_api_key, delete_model, delete_provider,
+        ProviderForm,
+    },
 };
 use tempfile::tempdir;
 
@@ -50,6 +53,59 @@ fn delete_api_key_clears_active_selection_for_that_key() {
 
     assert!(config.providers[0].api_keys.is_empty());
     assert!(config.active_selection.is_none());
+}
+
+#[test]
+fn delete_model_removes_manual_model() {
+    let mut config = sample_config();
+    config.providers[0].manual_models = vec!["manual-a".into(), "manual-b".into()];
+
+    delete_model(&mut config, "provider", "manual-a").unwrap();
+
+    assert_eq!(
+        config.providers[0].manual_models,
+        vec!["manual-b".to_string()]
+    );
+}
+
+#[test]
+fn delete_model_clears_active_selection_when_model_matches() {
+    let mut config = sample_config();
+    config.providers[0].manual_models = vec!["manual-a".into()];
+    config.active_selection = Some(ActiveSelection {
+        provider_id: "provider".into(),
+        api_key_id: "key".into(),
+        model_id: "manual-a".into(),
+    });
+
+    delete_model(&mut config, "provider", "manual-a").unwrap();
+
+    assert!(config.active_selection.is_none());
+}
+
+#[test]
+fn delete_model_keeps_active_selection_when_other_model_active() {
+    let mut config = sample_config();
+    config.providers[0].manual_models = vec!["manual-a".into(), "manual-b".into()];
+    config.active_selection = Some(ActiveSelection {
+        provider_id: "provider".into(),
+        api_key_id: "key".into(),
+        model_id: "manual-b".into(),
+    });
+
+    delete_model(&mut config, "provider", "manual-a").unwrap();
+
+    assert_eq!(
+        config.active_selection.as_ref().unwrap().model_id,
+        "manual-b"
+    );
+}
+
+#[test]
+fn delete_model_errors_when_model_not_in_manual_models() {
+    let mut config = sample_config();
+    // "model" only exists in the cache, not in manual_models.
+    assert!(delete_model(&mut config, "provider", "model").is_err());
 }
 
 #[test]

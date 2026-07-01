@@ -9,8 +9,8 @@ use aikit_core::{
         AikitConfig, AikitState, ApiKeyConfig, ProviderConfig, TargetConfig,
     },
     config_ops::{
-        add_api_key, add_provider, backup_config_file, delete_api_key, delete_provider,
-        update_api_key, update_provider, ApiKeyForm, ProviderForm,
+        add_api_key, add_provider, backup_config_file, delete_api_key, delete_model,
+        delete_provider, update_api_key, update_provider, ApiKeyForm, ProviderForm,
     },
     import::{
         apply_import_candidates, candidate_fingerprint, scan_claude_config, scan_codex_config,
@@ -73,6 +73,10 @@ pub enum ModalState {
     ConfirmDeleteApiKey {
         provider_id: String,
         api_key_id: String,
+    },
+    ConfirmDeleteModel {
+        provider_id: String,
+        model: String,
     },
     ImportPrompt {
         candidates: Vec<ImportCandidate>,
@@ -356,6 +360,32 @@ impl AppState {
         self.modal_state = ModalState::ConfirmDeleteApiKey {
             provider_id: provider.id.clone(),
             api_key_id,
+        };
+        Ok(())
+    }
+
+    pub fn open_delete_model_confirmation(&mut self) -> Result<()> {
+        let provider = self
+            .selected_provider()
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        let model_index = match self.selected_selection_item() {
+            Some(SelectionItem::Model(index)) => index,
+            _ => return Err(AikitError::ConfigParse("no model selected".into())),
+        };
+        let model = provider_model_at(provider, model_index)
+            .ok_or_else(|| AikitError::ConfigParse("no model selected".into()))?
+            .to_string();
+
+        if provider.manual_models.iter().all(|manual| manual != &model) {
+            self.set_status(format!(
+                "Model '{model}' comes from the provider; refresh models to update it"
+            ));
+            return Ok(());
+        }
+
+        self.modal_state = ModalState::ConfirmDeleteModel {
+            provider_id: provider.id.clone(),
+            model,
         };
         Ok(())
     }
@@ -817,6 +847,17 @@ impl AppState {
                 self.set_status(format!("Deleted API key {api_key_id}"));
                 Ok(())
             }
+            ModalState::ConfirmDeleteModel { provider_id, model } => {
+                let _ = backup_config_file(&self.config_path)?;
+                let mut next_config = self.config.clone();
+                delete_model(&mut next_config, &provider_id, &model)?;
+                self.persist_config_if_file_backed_config(&next_config)?;
+                self.config = next_config;
+                self.normalize_selection_indices();
+                self.modal_state = ModalState::None;
+                self.set_status(format!("Deleted model {model}"));
+                Ok(())
+            }
             _ => Err(AikitError::Provider(
                 "modal does not require confirmation".into(),
             )),
@@ -1066,13 +1107,6 @@ impl AppState {
 
     pub fn selected_selection_item(&self) -> Option<SelectionItem> {
         self.selection_items().get(self.detail_index).copied()
-    }
-
-    pub fn selection_item_is_api_key(&self) -> bool {
-        matches!(
-            self.selected_selection_item(),
-            Some(SelectionItem::ApiKey(_))
-        )
     }
 
     fn normalize_selection_indices(&mut self) {

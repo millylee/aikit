@@ -823,7 +823,50 @@ fn delete_provider_save_failure_keeps_config_unchanged() {
 }
 
 #[test]
-fn x_on_model_row_does_not_open_api_key_delete_confirmation() {
+fn d_in_providers_pane_opens_provider_delete_confirmation() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Providers;
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert!(matches!(
+        state.modal_state,
+        ModalState::ConfirmDeleteProvider { .. }
+    ));
+}
+
+#[test]
+fn d_in_selection_pane_on_api_key_opens_key_delete_confirmation() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Selection;
+    // detail_index starts on the API key row.
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert!(matches!(
+        state.modal_state,
+        ModalState::ConfirmDeleteApiKey { .. }
+    ));
+}
+
+#[test]
+fn d_on_cached_model_shows_hint_and_no_modal() {
+    // sample_config ships cached (provider-sourced) models only; pressing d on a
+    // cached model row must not open a delete modal.
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
@@ -834,12 +877,89 @@ fn x_on_model_row_does_not_open_api_key_delete_confirmation() {
 
     let action = handle_key(
         &mut state,
-        KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
     );
 
     assert_eq!(action, AppAction::None);
     assert_eq!(state.modal_state, ModalState::None);
     assert_eq!(state.config.providers[0].api_keys.len(), original_key_count);
+}
+
+#[test]
+fn d_in_applyto_pane_shows_hint_and_no_modal() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+    let original_provider_count = state.config.providers.len();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert_eq!(state.modal_state, ModalState::None);
+    assert_eq!(state.config.providers.len(), original_provider_count);
+}
+
+#[test]
+fn d_on_manual_model_opens_delete_confirmation() {
+    let config = sample_config_with_manual_model();
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+    // selection_items = [ApiKey(0), Model(0)=cached, Model(1)=manual]; land on the manual model.
+    state.select_next();
+    state.select_next();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert!(matches!(
+        state.modal_state,
+        ModalState::ConfirmDeleteModel { ref model, .. } if model == "manual-model"
+    ));
+}
+
+#[test]
+fn confirm_delete_model_removes_manual_model() {
+    let config = sample_config_with_manual_model();
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+    // selection_items = [ApiKey(0), Model(0)=cached, Model(1)=manual]; land on the manual model.
+    state.select_next();
+    state.select_next();
+
+    state.open_delete_model_confirmation().unwrap();
+    state.confirm_modal().unwrap();
+
+    assert!(state.config.providers[0]
+        .manual_models
+        .iter()
+        .all(|model| model != "manual-model"));
+}
+
+#[test]
+fn delete_model_clears_active_selection_when_it_matches() {
+    let mut config = sample_config_with_manual_model();
+    config.active_selection = Some(ActiveSelection {
+        provider_id: "provider".into(),
+        api_key_id: "key".into(),
+        model_id: "manual-model".into(),
+    });
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+    state.select_next();
+    state.select_next();
+
+    state.open_delete_model_confirmation().unwrap();
+    state.confirm_modal().unwrap();
+
+    assert!(state.config.active_selection.is_none());
 }
 
 #[test]
@@ -1006,4 +1126,15 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
         }],
         backup_history: Vec::new(),
     }
+}
+
+fn sample_config_with_manual_model() -> AikitConfig {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    let provider = &mut config.providers[0];
+    // Keep one cached model so the Selection pane shows [ApiKey, cached model, manual model].
+    if let Some(cache) = provider.models_cache.as_mut() {
+        cache.models.truncate(1);
+    }
+    provider.manual_models = vec!["manual-model".into()];
+    config
 }
