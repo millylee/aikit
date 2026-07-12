@@ -20,7 +20,11 @@ pub fn tool_display_name(target_id: &str) -> String {
         .unwrap_or_else(|| "Unknown target".to_string())
 }
 
-pub fn resolve_tool_config_dir(target_id: &str, config_path: &Path, home: &Path) -> Option<PathBuf> {
+pub fn resolve_tool_config_dir(
+    target_id: &str,
+    config_path: &Path,
+    home: &Path,
+) -> Option<PathBuf> {
     if let Some(parent) = config_path.parent() {
         if let Some(dir_name) = tool_dir_name(target_id) {
             if parent
@@ -72,8 +76,7 @@ mod tests {
         let config_path = dir.path().join("settings.json");
         std::fs::write(&config_path, "{}").unwrap();
 
-        ensure_tool_present_for_new_config("claude", &config_path, dir.path())
-            .unwrap();
+        ensure_tool_present_for_new_config("claude", &config_path, dir.path()).unwrap();
     }
 
     #[test]
@@ -92,8 +95,8 @@ mod tests {
         let tool_dir = dir.path().join(".claude");
         let config_path = tool_dir.join("settings.json");
 
-        let err = ensure_tool_present_for_new_config("claude", &config_path, &tool_dir)
-            .unwrap_err();
+        let err =
+            ensure_tool_present_for_new_config("claude", &config_path, &tool_dir).unwrap_err();
         assert!(matches!(err, AikitError::TargetSkipped(_)));
         assert!(!config_path.exists());
     }

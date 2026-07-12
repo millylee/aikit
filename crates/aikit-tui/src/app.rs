@@ -1928,9 +1928,7 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
         succeeded,
         skipped,
         failed,
-        message: format!(
-            "Applied {succeeded} target(s), {skipped} skipped, {failed} failed"
-        ),
+        message: format!("Applied {succeeded} target(s), {skipped} skipped, {failed} failed"),
         target_statuses: Vec::new(),
     };
     outcome.target_statuses = target_statuses;

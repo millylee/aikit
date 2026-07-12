@@ -643,11 +643,7 @@ fn apply_active_selection_skips_target_when_tool_dir_missing() {
     assert_eq!(outcome.skipped, 1);
     assert_eq!(outcome.failed, 0);
     assert!(!claude_path.exists());
-    assert!(
-        outcome.target_statuses[0]
-            .message
-            .starts_with("skipped:")
-    );
+    assert!(outcome.target_statuses[0].message.starts_with("skipped:"));
 }
 
 #[test]
