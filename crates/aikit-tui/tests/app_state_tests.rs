@@ -3,9 +3,13 @@ use aikit_core::{
         ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
     },
     updater::UpdateCheckOutcome,
+    AikitError,
 };
 use aikit_tui::{
-    app::{active_target_selection, apply_active_selection, AppState, FocusedPane, ModalState},
+    app::{
+        active_target_selection, apply_active_selection, format_refresh_error, AppState,
+        FocusedPane, ModalState,
+    },
     input::{handle_key, AppAction},
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -46,6 +50,36 @@ fn r_requests_model_refresh() {
     );
 
     assert_eq!(action, AppAction::RefreshModels);
+}
+
+#[test]
+fn format_refresh_error_keeps_short_provider_messages() {
+    let err = AikitError::Provider("authentication or permission problem".into());
+    let message = format_refresh_error(&err);
+
+    assert_eq!(
+        message,
+        "Refresh failed: authentication or permission problem"
+    );
+}
+
+#[test]
+fn format_refresh_error_truncates_long_provider_messages() {
+    let err = AikitError::Provider("x".repeat(120));
+    let message = format_refresh_error(&err);
+
+    assert!(message.starts_with("Refresh failed: "));
+    assert!(message.ends_with("..."));
+    assert!(message.chars().count() <= "Refresh failed: ".chars().count() + 80);
+}
+
+#[test]
+fn format_refresh_error_truncates_long_config_parse_messages() {
+    let err = AikitError::ConfigParse("y".repeat(120));
+    let message = format_refresh_error(&err);
+
+    assert!(message.starts_with("Refresh failed: "));
+    assert!(message.ends_with("..."));
 }
 
 #[test]

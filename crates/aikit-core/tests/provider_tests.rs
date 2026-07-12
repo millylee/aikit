@@ -2,6 +2,7 @@ use aikit_core::{
     cache::refresh_models,
     config::{ApiKeyConfig, ModelCache, ProviderConfig},
     provider::OpenAiCompatibleClient,
+    AikitError,
 };
 use wiremock::{
     matchers::{method, path},
@@ -82,4 +83,26 @@ async fn refresh_failure_keeps_existing_cache() {
     let cache = provider.models_cache.unwrap();
     assert_eq!(cache.models, vec!["old-model"]);
     assert!(cache.last_error.unwrap().contains("authentication"));
+}
+
+#[tokio::test]
+async fn invalid_model_response_is_short_without_body() {
+    let server = MockServer::start().await;
+    let body = "<html><body>Very long error page content that should not appear</body></html>";
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let client = OpenAiCompatibleClient::new(reqwest::Client::new());
+    let err = client
+        .list_models(&format!("{}/v1", server.uri()), "sk-test")
+        .await
+        .unwrap_err();
+
+    let message = err.to_string();
+    assert!(message.contains("invalid model response from provider"));
+    assert!(!message.contains("Very long error"));
+    assert!(message.chars().count() < 100);
 }

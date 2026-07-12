@@ -30,7 +30,7 @@ impl OpenAiCompatibleClient {
             .bearer_auth(api_key)
             .send()
             .await
-            .map_err(|err| AikitError::Provider(format!("network error: {err}")))?;
+            .map_err(|err| AikitError::Provider(network_error_message(&err)))?;
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(AikitError::Provider(
@@ -48,8 +48,20 @@ impl OpenAiCompatibleClient {
         let body: ModelListResponse = response
             .json()
             .await
-            .map_err(|err| AikitError::Provider(format!("invalid model response: {err}")))?;
+            .map_err(|_| {
+                AikitError::Provider("invalid model response from provider".into())
+            })?;
         Ok(body.data.into_iter().map(|model| model.id).collect())
+    }
+}
+
+fn network_error_message(err: &reqwest::Error) -> String {
+    if err.is_timeout() {
+        "network error: request timed out".into()
+    } else if err.is_connect() {
+        "network error: connection failed".into()
+    } else {
+        "network error: request failed".into()
     }
 }
 

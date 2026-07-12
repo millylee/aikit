@@ -4,7 +4,7 @@ use aikit_core::{
     config::default_config_path, import::candidate_fingerprint, provider::OpenAiCompatibleClient,
     updater,
 };
-use aikit_tui::app::AppState;
+use aikit_tui::app::{format_refresh_error, AppState};
 use aikit_tui::input::{handle_key, AppAction};
 use aikit_tui::ui;
 use color_eyre::Result;
@@ -97,7 +97,7 @@ async fn run_app(
                         AppAction::RefreshModels => match state.refresh_active_models(client).await
                         {
                             Ok(outcome) => state.set_status(outcome.message),
-                            Err(err) => state.set_status(format!("Refresh failed: {err}")),
+                            Err(err) => state.set_status(format_refresh_error(&err)),
                         },
                         AppAction::ApplySelection => match state.apply_active_selection() {
                             Ok(outcome) => state.set_status(outcome.message),

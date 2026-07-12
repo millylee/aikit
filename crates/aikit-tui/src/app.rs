@@ -1772,6 +1772,34 @@ impl AppCommandOutcome {
     }
 }
 
+const REFRESH_ERROR_MAX_CHARS: usize = 80;
+
+pub fn format_refresh_error(err: &AikitError) -> String {
+    let detail = match err {
+        AikitError::Provider(msg) => match msg.as_str() {
+            "authentication or permission problem"
+            | "models endpoint was not found"
+            | "invalid model response from provider" => msg.clone(),
+            m if m.starts_with("network error:") => msg.clone(),
+            m if m.starts_with("provider returned status") => msg.clone(),
+            m if m.starts_with("api key not found:") => msg.clone(),
+            _ => truncate_status_text(msg, REFRESH_ERROR_MAX_CHARS),
+        },
+        AikitError::ConfigParse(msg) => truncate_status_text(msg, REFRESH_ERROR_MAX_CHARS),
+        other => truncate_status_text(&other.to_string(), REFRESH_ERROR_MAX_CHARS),
+    };
+    format!("Refresh failed: {detail}")
+}
+
+fn truncate_status_text(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut truncated: String = text.chars().take(max_chars.saturating_sub(3)).collect();
+    truncated.push_str("...");
+    truncated
+}
+
 pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> {
     let active = config
         .active_selection
