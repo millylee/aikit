@@ -705,7 +705,6 @@ impl AppState {
                 candidates,
                 selected_indices,
                 fingerprint,
-                persist_skip: _,
                 ..
             } => (candidates, selected_indices, fingerprint),
             _ => {
