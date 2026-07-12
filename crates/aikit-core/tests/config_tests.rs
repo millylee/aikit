@@ -1,6 +1,6 @@
 use aikit_core::config::{
     default_config_path, model_cache_path, state_path, AikitConfig, ApiKeyConfig,
-    ImportPromptState, ModelCache, ProviderConfig, TargetConfig,
+    ImportPromptState, ModelCache, ProviderConfig, TargetConfig, UpdatePromptState,
 };
 use tempfile::tempdir;
 
@@ -30,6 +30,9 @@ fn saves_and_loads_config_as_toml() {
         import_prompt: ImportPromptState {
             skipped_fingerprint: Some("skip-me".into()),
         },
+        update_prompt: UpdatePromptState {
+            skipped_version: Some("9.9.9".into()),
+        },
         targets: vec![TargetConfig {
             id: "codex".into(),
             enabled: true,
@@ -42,6 +45,7 @@ fn saves_and_loads_config_as_toml() {
     let config_content = std::fs::read_to_string(&path).unwrap();
     assert!(!config_content.contains("models_cache"));
     assert!(!config_content.contains("import_prompt"));
+    assert!(!config_content.contains("update_prompt"));
     assert!(!config_content.contains("backup_history"));
 
     assert!(state_path(&path).exists());
@@ -58,7 +62,35 @@ fn saves_and_loads_config_as_toml() {
         loaded.import_prompt.skipped_fingerprint.as_deref(),
         Some("skip-me")
     );
+    assert_eq!(
+        loaded.update_prompt.skipped_version.as_deref(),
+        Some("9.9.9")
+    );
     assert_eq!(loaded.targets[0].id, "codex");
+}
+
+#[test]
+fn update_prompt_skipped_version_persists_in_state_sidecar() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("aikit").join("config.toml");
+    let config = AikitConfig {
+        providers: Vec::new(),
+        active_selection: None,
+        import_prompt: ImportPromptState::default(),
+        update_prompt: UpdatePromptState {
+            skipped_version: Some("1.2.3".into()),
+        },
+        targets: Vec::new(),
+        backup_history: vec![],
+    };
+
+    config.save_with_sidecars(&path).unwrap();
+    let loaded = AikitConfig::load_with_sidecars(&path).unwrap();
+
+    assert_eq!(
+        loaded.update_prompt.skipped_version.as_deref(),
+        Some("1.2.3")
+    );
 }
 
 #[test]

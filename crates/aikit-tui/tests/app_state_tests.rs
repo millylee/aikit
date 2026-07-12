@@ -1,5 +1,8 @@
-use aikit_core::config::{
-    ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
+use aikit_core::{
+    config::{
+        ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
+    },
+    updater::UpdateCheckOutcome,
 };
 use aikit_tui::{
     app::{active_target_selection, apply_active_selection, AppState, FocusedPane, ModalState},
@@ -92,7 +95,8 @@ async fn check_updates_reports_available_release() {
     Mock::given(method("GET"))
         .and(path("/repos/millylee/aikit/releases/latest"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": "v999.0.0"
+            "tag_name": "v999.0.0",
+            "assets": []
         })))
         .mount(&server)
         .await;
@@ -118,7 +122,8 @@ async fn check_updates_reports_current_version_up_to_date() {
     Mock::given(method("GET"))
         .and(path("/repos/millylee/aikit/releases/latest"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": format!("v{}", env!("CARGO_PKG_VERSION"))
+            "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")),
+            "assets": []
         })))
         .mount(&server)
         .await;
@@ -136,6 +141,67 @@ async fn check_updates_reports_current_version_up_to_date() {
     assert!(!outcome.update_available);
     assert_eq!(outcome.latest_version, env!("CARGO_PKG_VERSION"));
     assert!(outcome.message.contains("Already up to date"));
+}
+
+#[test]
+fn should_prompt_for_update_skips_when_version_already_skipped() {
+    let mut state = AppState::default();
+    state.config.update_prompt.skipped_version = Some("2.0.0".into());
+    let outcome = UpdateCheckOutcome {
+        current_version: "1.0.0".into(),
+        latest_version: "2.0.0".into(),
+        update_available: true,
+        message: "Update available".into(),
+    };
+
+    assert!(!state.should_prompt_for_update(&outcome));
+}
+
+#[test]
+fn startup_update_prompt_skip_stores_skipped_version() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    AikitConfig::default()
+        .save_with_sidecars(&config_path)
+        .unwrap();
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+
+    state
+        .open_startup_update_prompt(UpdateCheckOutcome {
+            current_version: env!("CARGO_PKG_VERSION").into(),
+            latest_version: "9.9.9".into(),
+            update_available: true,
+            message: "Update available".into(),
+        })
+        .unwrap();
+    state.skip_update_prompt().unwrap();
+
+    let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert_eq!(
+        saved.update_prompt.skipped_version.as_deref(),
+        Some("9.9.9")
+    );
+}
+
+#[test]
+fn update_prompt_enter_requests_apply_update() {
+    let mut state = AppState::default();
+    state
+        .open_update_prompt_from_outcome(UpdateCheckOutcome {
+            current_version: env!("CARGO_PKG_VERSION").into(),
+            latest_version: "9.9.9".into(),
+            update_available: true,
+            message: "Update available".into(),
+        })
+        .unwrap();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::ApplyUpdate);
 }
 
 #[test]
@@ -1185,6 +1251,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
             model_id: "model-active".into(),
         }),
         import_prompt: Default::default(),
+        update_prompt: Default::default(),
         targets: vec![TargetConfig {
             id: "codex".into(),
             enabled: true,

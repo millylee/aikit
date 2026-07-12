@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use serde::Deserialize;
-
 use aikit_core::{
     cache::refresh_models,
     config::{
@@ -21,6 +19,7 @@ use aikit_core::{
         claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
         TargetWriteResult, TargetWriter,
     },
+    updater::{self, UpdateApplyOutcome, UpdateCheckOutcome},
     AikitError, Result,
 };
 
@@ -45,14 +44,6 @@ pub struct AppState {
     detail_index: usize,
     pub target_statuses: Vec<TargetStatus>,
     import_candidates_for_test: Option<Vec<ImportCandidate>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UpdateCheckOutcome {
-    pub current_version: String,
-    pub latest_version: String,
-    pub update_available: bool,
-    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +85,11 @@ pub enum ModalState {
         persist_skip: bool,
     },
     ModelBrowser(ModelBrowserState),
+    UpdatePrompt {
+        current_version: String,
+        latest_version: String,
+        persist_skip: bool,
+    },
     Shortcuts,
 }
 
@@ -1173,38 +1169,75 @@ impl AppState {
         client: &reqwest::Client,
         latest_release_url: &str,
     ) -> Result<UpdateCheckOutcome> {
-        let release = client
-            .get(latest_release_url)
-            .header("User-Agent", "aikit")
-            .send()
-            .await
-            .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
-            .error_for_status()
-            .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
-            .json::<GithubLatestRelease>()
-            .await
-            .map_err(|err| AikitError::Provider(format!("update response parse failed: {err}")))?;
-        let latest_version = normalize_release_tag(&release.tag_name);
-        if latest_version.is_empty() {
-            return Err(AikitError::Provider(
-                "latest release does not include a tag_name".into(),
-            ));
+        updater::check_for_updates(client, latest_release_url).await
+    }
+
+    pub fn should_prompt_for_update(&self, outcome: &UpdateCheckOutcome) -> bool {
+        if !outcome.update_available {
+            return false;
         }
+        self.config
+            .update_prompt
+            .skipped_version
+            .as_deref()
+            != Some(outcome.latest_version.as_str())
+    }
 
-        let current_version = env!("CARGO_PKG_VERSION").to_string();
-        let update_available = version_is_newer(&latest_version, &current_version);
-        let message = if update_available {
-            format!("Update available: v{latest_version} (current v{current_version})")
-        } else {
-            format!("Already up to date: v{current_version}")
+    pub fn open_startup_update_prompt(&mut self, outcome: UpdateCheckOutcome) -> Result<()> {
+        self.open_update_prompt_from_outcome_with_skip(outcome, true)
+    }
+
+    pub fn open_update_prompt_from_outcome(&mut self, outcome: UpdateCheckOutcome) -> Result<()> {
+        self.open_update_prompt_from_outcome_with_skip(outcome, false)
+    }
+
+    fn open_update_prompt_from_outcome_with_skip(
+        &mut self,
+        outcome: UpdateCheckOutcome,
+        persist_skip: bool,
+    ) -> Result<()> {
+        if !outcome.update_available {
+            self.set_status(outcome.message);
+            return Ok(());
+        }
+        self.modal_state = ModalState::UpdatePrompt {
+            current_version: outcome.current_version,
+            latest_version: outcome.latest_version,
+            persist_skip,
         };
+        Ok(())
+    }
 
-        Ok(UpdateCheckOutcome {
-            current_version,
-            latest_version,
-            update_available,
-            message,
-        })
+    pub fn skip_update_prompt(&mut self) -> Result<()> {
+        let (latest_version, persist_skip) = match self.modal_state.clone() {
+            ModalState::UpdatePrompt {
+                latest_version,
+                persist_skip,
+                ..
+            } => (latest_version, persist_skip),
+            _ => {
+                return Err(AikitError::Provider(
+                    "update prompt is not open, cannot skip update".into(),
+                ))
+            }
+        };
+        if persist_skip {
+            let mut next_config = self.config.clone();
+            next_config.update_prompt.skipped_version = Some(latest_version);
+            self.persist_state_if_file_backed_config(&next_config)?;
+            self.config = next_config;
+        }
+        self.modal_state = ModalState::None;
+        self.set_status("Skipped update prompt");
+        Ok(())
+    }
+
+    pub async fn apply_update(
+        &mut self,
+        client: &reqwest::Client,
+        latest_release_url: &str,
+    ) -> Result<UpdateApplyOutcome> {
+        updater::perform_update(client, latest_release_url).await
     }
 
     pub fn apply_active_selection(&mut self) -> Result<AppCommandOutcome> {
@@ -1667,6 +1700,7 @@ impl AppState {
             &config_path,
             &AikitState {
                 import_prompt: config.import_prompt.clone(),
+                update_prompt: config.update_prompt.clone(),
             },
         )
     }
@@ -1850,41 +1884,6 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
     );
     outcome.target_statuses = target_statuses;
     Ok(outcome)
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubLatestRelease {
-    tag_name: String,
-}
-
-fn normalize_release_tag(tag: &str) -> String {
-    tag.trim().trim_start_matches('v').to_string()
-}
-
-fn version_is_newer(candidate: &str, current: &str) -> bool {
-    compare_versions(candidate, current).is_gt()
-}
-
-fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
-    let left_parts = version_parts(left);
-    let right_parts = version_parts(right);
-    let width = left_parts.len().max(right_parts.len());
-    for index in 0..width {
-        let left_part = left_parts.get(index).copied().unwrap_or(0);
-        let right_part = right_parts.get(index).copied().unwrap_or(0);
-        match left_part.cmp(&right_part) {
-            std::cmp::Ordering::Equal => {}
-            ordering => return ordering,
-        }
-    }
-    std::cmp::Ordering::Equal
-}
-
-fn version_parts(version: &str) -> Vec<u64> {
-    version
-        .split(['.', '-'])
-        .map(|part| part.parse::<u64>().unwrap_or(0))
-        .collect()
 }
 
 fn load_or_default(config_path: &Path) -> Result<AikitConfig> {

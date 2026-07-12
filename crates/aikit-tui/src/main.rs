@@ -2,6 +2,7 @@ use std::io::{self, stdout};
 
 use aikit_core::{
     config::default_config_path, import::candidate_fingerprint, provider::OpenAiCompatibleClient,
+    updater,
 };
 use aikit_tui::app::AppState;
 use aikit_tui::input::{handle_key, AppAction};
@@ -51,6 +52,7 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut state = AppState::new(default_config_path()?);
     state.load_config()?;
+    let http_client = reqwest::Client::new();
     if state.config.providers.is_empty() {
         let plan = state.scan_import_candidates();
         if !plan.candidates.is_empty() {
@@ -61,8 +63,19 @@ async fn main() -> Result<()> {
             }
         }
     }
-    let client = OpenAiCompatibleClient::new(reqwest::Client::new());
-    let http_client = reqwest::Client::new();
+    if !state.is_modal_open() {
+        if let Ok(Ok(outcome)) = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            updater::check_for_updates(&http_client, LATEST_RELEASE_URL),
+        )
+        .await
+        {
+            if state.should_prompt_for_update(&outcome) {
+                state.open_startup_update_prompt(outcome)?;
+            }
+        }
+    }
+    let client = OpenAiCompatibleClient::new(http_client.clone());
     run_app(&mut terminal, &mut state, &client, &http_client).await
 }
 
@@ -93,8 +106,27 @@ async fn run_app(
                         AppAction::CheckUpdates => {
                             state.set_status("Checking for updates...");
                             match state.check_updates(http_client, LATEST_RELEASE_URL).await {
+                                Ok(outcome) if outcome.update_available => {
+                                    if let Err(err) =
+                                        state.open_update_prompt_from_outcome(outcome)
+                                    {
+                                        state.set_status(format!("Update prompt failed: {err}"));
+                                    }
+                                }
                                 Ok(outcome) => state.set_status(outcome.message),
                                 Err(err) => state.set_status(format!("Update check failed: {err}")),
+                            }
+                        }
+                        AppAction::ApplyUpdate => {
+                            state.set_status("Downloading update...");
+                            match state.apply_update(http_client, LATEST_RELEASE_URL).await {
+                                Ok(outcome) => {
+                                    state.set_status(outcome.message);
+                                    if outcome.quit_after {
+                                        break;
+                                    }
+                                }
+                                Err(err) => state.set_status(format!("Update failed: {err}")),
                             }
                         }
                     }

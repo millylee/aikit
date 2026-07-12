@@ -492,6 +492,16 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             );
             render_modal_text(frame, area, "Browse Models", lines.join("\n"));
         }
+        ModalState::UpdatePrompt {
+            current_version,
+            latest_version,
+            ..
+        } => {
+            let text = format!(
+                "Current: v{current_version}\nLatest:  v{latest_version}\n\nEnter install update and restart\nEsc skip this version"
+            );
+            render_modal_text(frame, area, "Update Available", text);
+        }
         ModalState::Shortcuts => {
             render_modal_text(frame, area, "Shortcuts", shortcuts_text());
         }

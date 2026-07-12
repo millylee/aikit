@@ -15,6 +15,8 @@ pub struct AikitConfig {
     pub active_selection: Option<ActiveSelection>,
     #[serde(default, skip_serializing)]
     pub import_prompt: ImportPromptState,
+    #[serde(default, skip_serializing)]
+    pub update_prompt: UpdatePromptState,
     pub targets: Vec<TargetConfig>,
     #[serde(default, skip_serializing)]
     pub backup_history: Vec<BackupRecord>,
@@ -60,9 +62,16 @@ pub struct ImportPromptState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct UpdatePromptState {
+    pub skipped_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct AikitState {
     #[serde(default)]
     pub import_prompt: ImportPromptState,
+    #[serde(default)]
+    pub update_prompt: UpdatePromptState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -92,6 +101,7 @@ impl Default for AikitConfig {
             providers: Vec::new(),
             active_selection: None,
             import_prompt: ImportPromptState::default(),
+            update_prompt: UpdatePromptState::default(),
             targets: vec![
                 TargetConfig {
                     id: "claude".into(),
@@ -150,7 +160,9 @@ pub fn default_config_path() -> Result<PathBuf> {
 }
 
 pub fn load_sidecars(config_path: &Path, config: &mut AikitConfig) -> Result<()> {
-    config.import_prompt = load_state(config_path)?.import_prompt;
+    let state = load_state(config_path)?;
+    config.import_prompt = state.import_prompt;
+    config.update_prompt = state.update_prompt;
     let cache_store = load_model_cache_store(config_path)?;
     for provider in &mut config.providers {
         provider.models_cache = cache_store.providers.get(&provider.id).cloned();
@@ -163,6 +175,7 @@ pub fn save_sidecars(config_path: &Path, config: &AikitConfig) -> Result<()> {
         config_path,
         &AikitState {
             import_prompt: config.import_prompt.clone(),
+            update_prompt: config.update_prompt.clone(),
         },
     )?;
     save_model_cache_store(config_path, &model_cache_store_from_config(config))?;
