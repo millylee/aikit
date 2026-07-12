@@ -2,7 +2,7 @@ use aikit_core::{
     config::{
         ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig, TargetConfig,
     },
-    updater::UpdateCheckOutcome,
+    updater::StageUpdateOutcome,
     AikitError,
 };
 use aikit_tui::{
@@ -53,46 +53,42 @@ fn r_requests_model_refresh() {
 }
 
 #[test]
-fn update_prompt_enter_shows_progress_before_apply() {
+fn apply_stage_update_outcome_sets_pending_status() {
     let mut state = AppState::default();
     state
-        .open_update_prompt_from_outcome(UpdateCheckOutcome {
-            current_version: env!("CARGO_PKG_VERSION").into(),
-            latest_version: "9.9.9".into(),
-            update_available: true,
-            message: "Update available".into(),
+        .apply_stage_update_outcome(StageUpdateOutcome::Staged {
+            version: "9.9.9".into(),
         })
         .unwrap();
 
-    let action = handle_key(
-        &mut state,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    assert_eq!(
+        state.config.update_prompt.pending_version.as_deref(),
+        Some("9.9.9")
     );
-
-    assert_eq!(action, AppAction::ApplyUpdate);
-    assert_eq!(state.modal_state, ModalState::UpdateProgress);
-    assert_eq!(state.status, "Downloading update...");
+    assert!(state.status.contains("restart aikit"));
 }
 
 #[test]
-fn update_progress_ignores_escape() {
-    let mut state = AppState::default();
-    state.modal_state = ModalState::UpdateProgress;
+fn should_stage_background_update_false_when_pending_ready() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let pending_dir = dir.path().join("aikit").join("pending-update");
+    std::fs::create_dir_all(&pending_dir).unwrap();
+    std::fs::write(
+        pending_dir.join(if cfg!(windows) { "aikit.exe" } else { "aikit" }),
+        b"bin",
+    )
+    .unwrap();
 
-    let action = handle_key(&mut state, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let mut config = AikitConfig::default();
+    config.update_prompt.pending_version = Some("9.9.9".into());
+    config.save_with_sidecars(&config_path).unwrap();
 
-    assert_eq!(action, AppAction::None);
-    assert_eq!(state.modal_state, ModalState::UpdateProgress);
-}
+    let mut state = AppState::new(config_path);
+    state.load_config().unwrap();
 
-#[test]
-fn finish_update_apply_closes_progress_modal() {
-    let mut state = AppState::default();
-    state.modal_state = ModalState::UpdateProgress;
-
-    state.finish_update_apply();
-
-    assert_eq!(state.modal_state, ModalState::None);
+    assert!(!state.should_stage_background_update());
+    assert!(state.status.contains("restart aikit"));
 }
 
 #[test]
@@ -221,42 +217,27 @@ async fn check_updates_reports_current_version_up_to_date() {
 }
 
 #[test]
-fn should_prompt_for_update_skips_when_version_already_skipped() {
+fn skipped_version_prevents_manual_stage_message() {
     let mut state = AppState::default();
     state.config.update_prompt.skipped_version = Some("2.0.0".into());
-    let outcome = UpdateCheckOutcome {
-        current_version: "1.0.0".into(),
-        latest_version: "2.0.0".into(),
-        update_available: true,
-        message: "Update available".into(),
-    };
 
-    assert!(!state.should_prompt_for_update(&outcome));
+    assert_eq!(
+        state.config.update_prompt.skipped_version.as_deref(),
+        Some("2.0.0")
+    );
 }
 
 #[test]
-fn startup_update_prompt_skip_stores_skipped_version() {
+fn pending_version_persists_in_state_sidecar() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
-    AikitConfig::default()
-        .save_with_sidecars(&config_path)
-        .unwrap();
-    let mut state = AppState::new(config_path.clone());
-    state.load_config().unwrap();
-
-    state
-        .open_startup_update_prompt(UpdateCheckOutcome {
-            current_version: env!("CARGO_PKG_VERSION").into(),
-            latest_version: "9.9.9".into(),
-            update_available: true,
-            message: "Update available".into(),
-        })
-        .unwrap();
-    state.skip_update_prompt().unwrap();
+    let mut config = AikitConfig::default();
+    config.update_prompt.pending_version = Some("9.9.9".into());
+    config.save_with_sidecars(&config_path).unwrap();
 
     let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert_eq!(
-        saved.update_prompt.skipped_version.as_deref(),
+        saved.update_prompt.pending_version.as_deref(),
         Some("9.9.9")
     );
 }

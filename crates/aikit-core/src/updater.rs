@@ -174,6 +174,89 @@ pub async fn download_and_stage(client: &Client, latest_release_url: &str) -> Re
     extract_binary_from_archive(&archive_bytes, &assets.archive_name)
 }
 
+pub fn pending_update_path(aikit_dir: &Path) -> PathBuf {
+    aikit_dir.join("pending-update").join(binary_file_name())
+}
+
+pub fn clear_pending_update(aikit_dir: &Path) -> Result<()> {
+    let dir = aikit_dir.join("pending-update");
+    if dir.exists() {
+        fs::remove_dir_all(&dir)?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StageUpdateOutcome {
+    NoUpdate,
+    AlreadyStaged { version: String },
+    Staged { version: String },
+}
+
+pub async fn stage_update_if_available(
+    client: &Client,
+    latest_release_url: &str,
+    aikit_dir: &Path,
+    skipped_version: Option<&str>,
+) -> Result<StageUpdateOutcome> {
+    let outcome = check_for_updates(client, latest_release_url).await?;
+    if !outcome.update_available {
+        return Ok(StageUpdateOutcome::NoUpdate);
+    }
+    if skipped_version == Some(outcome.latest_version.as_str()) {
+        return Ok(StageUpdateOutcome::NoUpdate);
+    }
+
+    let pending = pending_update_path(aikit_dir);
+    if pending.exists() {
+        return Ok(StageUpdateOutcome::AlreadyStaged {
+            version: outcome.latest_version,
+        });
+    }
+
+    let staged = download_and_stage(client, latest_release_url).await?;
+    if let Some(parent) = pending.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(&staged, &pending)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&pending)?.permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&pending, permissions)?;
+    }
+
+    Ok(StageUpdateOutcome::Staged {
+        version: outcome.latest_version,
+    })
+}
+
+pub fn apply_pending_update_at_startup(
+    aikit_dir: &Path,
+    #[allow(unused_variables)] pending_version: Option<&str>,
+) -> Result<Option<String>> {
+    let pending = pending_update_path(aikit_dir);
+    if !pending.exists() {
+        return Ok(None);
+    }
+
+    let target = std::env::current_exe().map_err(AikitError::Io)?;
+
+    #[cfg(windows)]
+    {
+        spawn_windows_replacer_and_launch(&pending, &target, aikit_dir)?;
+        std::process::exit(0);
+    }
+
+    #[cfg(not(windows))]
+    {
+        install_binary(&pending, &target)?;
+        clear_pending_update(aikit_dir)?;
+        Ok(pending_version.map(str::to_string))
+    }
+}
+
 pub async fn perform_update(
     client: &Client,
     latest_release_url: &str,
@@ -213,6 +296,38 @@ pub fn install_binary(staged: &Path, target: &Path) -> Result<()> {
         fs::set_permissions(target, permissions)?;
     }
     Ok(())
+}
+
+#[cfg(windows)]
+pub fn spawn_windows_replacer_and_launch(
+    staged: &Path,
+    target: &Path,
+    aikit_dir: &Path,
+) -> Result<()> {
+    use std::process::Command;
+
+    let staged = powershell_literal(staged);
+    let target = powershell_literal(target);
+    let pending_dir = powershell_literal(&aikit_dir.join("pending-update"));
+    let script = format!(
+        "Start-Sleep -Seconds 1; Copy-Item -LiteralPath '{staged}' -Destination '{target}' -Force; Remove-Item -LiteralPath '{pending_dir}' -Recurse -Force; Start-Process -FilePath '{target}'"
+    );
+    Command::new("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+        .spawn()
+        .map_err(AikitError::Io)?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn spawn_windows_replacer_and_launch(
+    _staged: &Path,
+    _target: &Path,
+    _aikit_dir: &Path,
+) -> Result<()> {
+    Err(AikitError::Provider(
+        "windows updater helper is only available on windows".into(),
+    ))
 }
 
 #[cfg(windows)]

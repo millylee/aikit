@@ -9,30 +9,10 @@ pub enum AppAction {
     RefreshModels,
     ApplySelection,
     CheckUpdates,
-    ApplyUpdate,
 }
 
 pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
     if state.is_modal_open() {
-        if matches!(
-            state.modal_state,
-            ModalState::UpdatePrompt { .. } | ModalState::UpdateProgress
-        ) {
-            return match key.code {
-                KeyCode::Enter if matches!(state.modal_state, ModalState::UpdatePrompt { .. }) => {
-                    state.begin_update_apply();
-                    AppAction::ApplyUpdate
-                }
-                KeyCode::Esc if matches!(state.modal_state, ModalState::UpdatePrompt { .. }) => {
-                    if let Err(err) = state.skip_update_prompt() {
-                        state.set_status(format!("Update failed: {err}"));
-                    }
-                    AppAction::None
-                }
-                _ => AppAction::None,
-            };
-        }
-
         if matches!(state.modal_state, ModalState::ImportPrompt { .. }) {
             return match key.code {
                 KeyCode::Enter => {

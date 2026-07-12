@@ -1,8 +1,10 @@
 use std::io::{self, stdout};
 
 use aikit_core::{
-    config::default_config_path, import::candidate_fingerprint, provider::OpenAiCompatibleClient,
-    updater,
+    config::default_config_path,
+    import::candidate_fingerprint,
+    provider::OpenAiCompatibleClient,
+    updater::{self, StageUpdateOutcome},
 };
 use aikit_tui::app::{format_refresh_error, AppState};
 use aikit_tui::input::{handle_key, AppAction};
@@ -52,6 +54,9 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut state = AppState::new(default_config_path()?);
     state.load_config()?;
+    if let Some(version) = state.apply_pending_update_on_startup()? {
+        state.set_status(format!("Installed update v{version}"));
+    }
     let http_client = reqwest::Client::new();
     if state.config.providers.is_empty() {
         let plan = state.scan_import_candidates();
@@ -63,20 +68,34 @@ async fn main() -> Result<()> {
             }
         }
     }
-    if !state.is_modal_open() {
-        if let Ok(Ok(outcome)) = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            updater::check_for_updates(&http_client, LATEST_RELEASE_URL),
-        )
-        .await
-        {
-            if state.should_prompt_for_update(&outcome) {
-                state.open_startup_update_prompt(outcome)?;
-            }
-        }
+
+    let (update_tx, mut update_rx) = tokio::sync::mpsc::unbounded_channel();
+    if !state.is_modal_open() && state.should_stage_background_update() {
+        let client = http_client.clone();
+        let skipped = state.config.update_prompt.skipped_version.clone();
+        let config_path = state.config_path.clone();
+        tokio::spawn(async move {
+            let aikit_dir = aikit_core::config::aikit_dir_for_config(&config_path);
+            let result = updater::stage_update_if_available(
+                &client,
+                LATEST_RELEASE_URL,
+                &aikit_dir,
+                skipped.as_deref(),
+            )
+            .await;
+            let _ = update_tx.send(result);
+        });
     }
+
     let client = OpenAiCompatibleClient::new(http_client.clone());
-    run_app(&mut terminal, &mut state, &client, &http_client).await
+    run_app(
+        &mut terminal,
+        &mut state,
+        &client,
+        &http_client,
+        &mut update_rx,
+    )
+    .await
 }
 
 async fn run_app(
@@ -84,8 +103,22 @@ async fn run_app(
     state: &mut AppState,
     client: &OpenAiCompatibleClient,
     http_client: &reqwest::Client,
+    update_rx: &mut tokio::sync::mpsc::UnboundedReceiver<
+        Result<StageUpdateOutcome, aikit_core::AikitError>,
+    >,
 ) -> Result<()> {
     loop {
+        while let Ok(result) = update_rx.try_recv() {
+            match result {
+                Ok(outcome) => {
+                    if let Err(err) = state.apply_stage_update_outcome(outcome) {
+                        state.set_status(format!("Update staging failed: {err}"));
+                    }
+                }
+                Err(err) => state.set_status(format!("Update check failed: {err}")),
+            }
+        }
+
         terminal.draw(|frame| ui::render(frame, state))?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -104,34 +137,12 @@ async fn run_app(
                             Err(err) => state.set_status(format!("Apply failed: {err}")),
                         },
                         AppAction::CheckUpdates => {
-                            state.set_status("Checking for updates...");
-                            match state.check_updates(http_client, LATEST_RELEASE_URL).await {
-                                Ok(outcome) if outcome.update_available => {
-                                    if let Err(err) = state.open_update_prompt_from_outcome(outcome)
-                                    {
-                                        state.set_status(format!("Update prompt failed: {err}"));
-                                    }
-                                }
-                                Ok(outcome) => state.set_status(outcome.message),
+                            match state
+                                .check_and_stage_updates(http_client, LATEST_RELEASE_URL)
+                                .await
+                            {
+                                Ok(()) => {}
                                 Err(err) => state.set_status(format!("Update check failed: {err}")),
-                            }
-                        }
-                        AppAction::ApplyUpdate => {
-                            terminal.draw(|frame| ui::render(frame, state))?;
-                            match state.apply_update(http_client, LATEST_RELEASE_URL).await {
-                                Ok(outcome) => {
-                                    state.finish_update_apply();
-                                    state.set_status(outcome.message);
-                                    terminal.draw(|frame| ui::render(frame, state))?;
-                                    if outcome.quit_after {
-                                        break;
-                                    }
-                                }
-                                Err(err) => {
-                                    state.finish_update_apply();
-                                    state.set_status(format!("Update failed: {err}"));
-                                    terminal.draw(|frame| ui::render(frame, state))?;
-                                }
                             }
                         }
                     }

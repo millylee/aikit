@@ -64,6 +64,8 @@ pub struct ImportPromptState {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct UpdatePromptState {
     pub skipped_version: Option<String>,
+    #[serde(default)]
+    pub pending_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
