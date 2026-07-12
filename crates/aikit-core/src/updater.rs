@@ -2,7 +2,6 @@ use std::{
     fs,
     io::copy,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use flate2::read::GzDecoder;
@@ -218,6 +217,8 @@ pub fn install_binary(staged: &Path, target: &Path) -> Result<()> {
 
 #[cfg(windows)]
 pub fn spawn_windows_replacer(staged: &Path, target: &Path) -> Result<()> {
+    use std::process::Command;
+
     let staged = powershell_literal(staged);
     let target = powershell_literal(target);
     let script = format!(
