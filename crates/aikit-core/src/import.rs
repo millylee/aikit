@@ -449,10 +449,14 @@ fn scan_claude_json_config(path: &Path) -> ImportPlan {
         .or_else(|| legacy_aikit.and_then(|node| node.get("api_key")))
         .and_then(JsonValue::as_str)
         .map(ToOwned::to_owned);
-    let model = env
-        .and_then(|node| node.get("ANTHROPIC_MODEL"))
-        .or_else(|| legacy_aikit.and_then(|node| node.get("model")))
+    let model = value
+        .get("model")
         .and_then(JsonValue::as_str)
+        .or_else(|| {
+            env.and_then(|node| node.get("ANTHROPIC_MODEL"))
+                .and_then(JsonValue::as_str)
+        })
+        .or_else(|| legacy_aikit.and_then(|node| node.get("model")).and_then(JsonValue::as_str))
         .map(ToOwned::to_owned);
 
     if base_url.is_none() && api_key_value.is_none() && model.is_none() {

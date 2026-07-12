@@ -70,8 +70,9 @@ impl ClaudeWriter {
             "ANTHROPIC_BASE_URL".into(),
             Value::String(selection.base_url.clone()),
         );
-        env_object.insert(
-            "ANTHROPIC_MODEL".into(),
+        env_object.remove("ANTHROPIC_MODEL");
+        object.insert(
+            "model".into(),
             Value::String(selection.model.clone()),
         );
 

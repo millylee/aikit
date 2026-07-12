@@ -246,7 +246,8 @@ fn claude_writer_creates_minimal_json_config() {
 
     let updated = std::fs::read_to_string(path).unwrap();
     let value: serde_json::Value = serde_json::from_str(&updated).unwrap();
-    assert_eq!(value["env"]["ANTHROPIC_MODEL"], "claude-model");
+    assert_eq!(value["model"], "claude-model");
+    assert!(value["env"].get("ANTHROPIC_MODEL").is_none());
     assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
     assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
 }
@@ -278,7 +279,8 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(value["theme"], "dark");
     assert_eq!(value["env"]["KEEP"], "yes");
-    assert_eq!(value["env"]["ANTHROPIC_MODEL"], "claude-model");
+    assert_eq!(value["model"], "claude-model");
+    assert!(value["env"].get("ANTHROPIC_MODEL").is_none());
     assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
     assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
 }

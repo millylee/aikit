@@ -92,6 +92,38 @@ api_key = "sk-codex"
 }
 
 #[test]
+fn claude_scan_reads_top_level_model() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"
+{
+  "theme": "dark",
+  "model": "claude-sonnet-4",
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-claude",
+    "ANTHROPIC_BASE_URL": "https://claude-proxy.example/v1"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let plan = scan_claude_config(&path);
+
+    assert!(plan.warnings.is_empty());
+    let candidate = &plan.candidates[0];
+    assert_eq!(candidate.source, ImportSource::Claude);
+    assert_eq!(
+        candidate.base_url.as_deref(),
+        Some("https://claude-proxy.example/v1")
+    );
+    assert_eq!(candidate.api_key_value.as_deref(), Some("sk-claude"));
+    assert_eq!(candidate.model.as_deref(), Some("claude-sonnet-4"));
+}
+
+#[test]
 fn claude_scan_reads_native_env_fields() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");
