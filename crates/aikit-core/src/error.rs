@@ -12,4 +12,6 @@ pub enum AikitError {
     Provider(String),
     #[error("target write error: {0}")]
     TargetWrite(String),
+    #[error("target skipped: {0}")]
+    TargetSkipped(String),
 }

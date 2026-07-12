@@ -35,7 +35,9 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
 #[test]
 fn codex_writer_creates_missing_config() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join(".codex").join("config.toml");
+    let tool_dir = dir.path().join(".codex");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    let path = tool_dir.join("config.toml");
 
     let result = CodexWriter::write_to_path(
         &path,
@@ -52,6 +54,44 @@ fn codex_writer_creates_missing_config() {
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
     assert!(updated.contains("sk-new"));
+}
+
+#[test]
+fn codex_writer_skips_missing_config_when_tool_dir_absent() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join(".codex").join("config.toml");
+
+    let result = CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetSkipped(_))));
+    assert!(!path.exists());
+}
+
+#[test]
+fn codex_writer_updates_existing_config_when_tool_dir_absent() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+
+    CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+        },
+    )
+    .unwrap();
+
+    let updated = std::fs::read_to_string(path).unwrap();
+    assert!(updated.contains("model-new"));
 }
 
 #[test]
@@ -77,6 +117,7 @@ fn codex_writer_refuses_invalid_existing_toml() {
 fn codex_writer_serializes_special_characters_in_toml() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
 
     let selection = TargetSelection {
         base_url: "https://example.com/v1?ref=\"test\"".into(),
@@ -232,7 +273,9 @@ aikit = "not-a-table"
 #[test]
 fn claude_writer_creates_minimal_json_config() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
+    let tool_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    let path = tool_dir.join("settings.json");
 
     ClaudeWriter::write_to_path(
         &path,
@@ -250,6 +293,24 @@ fn claude_writer_creates_minimal_json_config() {
     assert!(value["env"].get("ANTHROPIC_MODEL").is_none());
     assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
     assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
+}
+
+#[test]
+fn claude_writer_skips_missing_config_when_tool_dir_absent() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join(".claude").join("settings.json");
+
+    let result = ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetSkipped(_))));
+    assert!(!path.exists());
 }
 
 #[test]
@@ -283,6 +344,47 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
     assert!(value["env"].get("ANTHROPIC_MODEL").is_none());
     assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
     assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
+}
+
+#[test]
+fn gemini_writer_skips_missing_config_when_tool_dir_absent() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join(".gemini").join("settings.json");
+
+    let result = GeminiWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "gemini-model".into(),
+        },
+    );
+
+    assert!(matches!(result, Err(AikitError::TargetSkipped(_))));
+    assert!(!path.exists());
+}
+
+#[test]
+fn gemini_writer_creates_minimal_json_config_when_tool_dir_exists() {
+    let dir = tempdir().unwrap();
+    let tool_dir = dir.path().join(".gemini");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    let path = tool_dir.join("settings.json");
+
+    GeminiWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "gemini-model".into(),
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["aikit"]["model"], "gemini-model");
+    assert_eq!(value["aikit"]["api_key"], "sk-new");
 }
 
 #[test]

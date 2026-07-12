@@ -9,6 +9,7 @@ use crate::{AikitError, Result};
 
 use super::{
     backup::{backup_file, backup_file_to_root},
+    detect::{ensure_tool_present_for_new_config, resolve_tool_config_dir},
     TargetSelection, TargetWriteResult, TargetWriter,
 };
 
@@ -32,6 +33,12 @@ impl CodexWriter {
         selection: &TargetSelection,
         backup_root: Option<&Path>,
     ) -> Result<TargetWriteResult> {
+        let dirs = BaseDirs::new()
+            .ok_or_else(|| AikitError::TargetWrite("could not determine home directory".into()))?;
+        let tool_dir = resolve_tool_config_dir("codex", path, dirs.home_dir())
+            .ok_or_else(|| AikitError::TargetWrite("unknown codex config directory".into()))?;
+        ensure_tool_present_for_new_config("codex", path, &tool_dir)?;
+
         let mut root = if path.exists() {
             let existing = fs::read_to_string(path)?;
             match toml::from_str::<toml::Value>(&existing).map_err(|err| {

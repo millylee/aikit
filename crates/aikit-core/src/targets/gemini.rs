@@ -10,6 +10,7 @@ use crate::{AikitError, Result};
 
 use super::{
     backup::{backup_file, backup_file_to_root},
+    detect::{ensure_tool_present_for_new_config, resolve_tool_config_dir},
     TargetSelection, TargetWriteResult, TargetWriter,
 };
 
@@ -33,6 +34,12 @@ impl GeminiWriter {
         selection: &TargetSelection,
         backup_root: Option<&Path>,
     ) -> Result<TargetWriteResult> {
+        let dirs = BaseDirs::new()
+            .ok_or_else(|| AikitError::TargetWrite("could not determine home directory".into()))?;
+        let tool_dir = resolve_tool_config_dir("gemini", path, dirs.home_dir())
+            .ok_or_else(|| AikitError::TargetWrite("unknown gemini config directory".into()))?;
+        ensure_tool_present_for_new_config("gemini", path, &tool_dir)?;
+
         let mut value = if path.exists() {
             let existing = fs::read_to_string(path)?;
             serde_json::from_str::<Value>(&existing).map_err(|err| {

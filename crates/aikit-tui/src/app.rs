@@ -1765,6 +1765,7 @@ fn scan_with_default_path(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppCommandOutcome {
     pub succeeded: usize,
+    pub skipped: usize,
     pub failed: usize,
     pub message: String,
     pub target_statuses: Vec<TargetStatus>,
@@ -1774,6 +1775,7 @@ impl AppCommandOutcome {
     fn success(message: impl Into<String>, succeeded: usize, failed: usize) -> Self {
         Self {
             succeeded,
+            skipped: 0,
             failed,
             message: message.into(),
             target_statuses: Vec::new(),
@@ -1891,6 +1893,7 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
     let config = load_or_default(config_path)?;
     let selection = active_target_selection(&config)?;
     let mut succeeded = 0;
+    let mut skipped = 0;
     let mut failed = 0;
     let mut target_statuses = Vec::new();
 
@@ -1901,6 +1904,13 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
                 target_statuses.push(TargetStatus {
                     target_id: target.id.clone(),
                     message: "applied".into(),
+                });
+            }
+            Err(AikitError::TargetSkipped(msg)) => {
+                skipped += 1;
+                target_statuses.push(TargetStatus {
+                    target_id: target.id.clone(),
+                    message: format!("skipped: {msg}"),
                 });
             }
             Err(err) => {
@@ -1914,11 +1924,15 @@ pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
     }
 
     config.save_with_sidecars(config_path)?;
-    let mut outcome = AppCommandOutcome::success(
-        format!("Applied {succeeded} target(s), {failed} failed"),
+    let mut outcome = AppCommandOutcome {
         succeeded,
+        skipped,
         failed,
-    );
+        message: format!(
+            "Applied {succeeded} target(s), {skipped} skipped, {failed} failed"
+        ),
+        target_statuses: Vec::new(),
+    };
     outcome.target_statuses = target_statuses;
     Ok(outcome)
 }

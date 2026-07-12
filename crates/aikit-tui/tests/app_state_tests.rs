@@ -598,8 +598,9 @@ fn active_target_selection_uses_configured_provider_key_and_cached_model() {
 fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
-    let codex_path = dir.path().join("codex").join("config.toml");
+    let codex_path = dir.path().join(".codex").join("config.toml");
     let gemini_path = dir.path().join("gemini").join("settings.json");
+    std::fs::create_dir_all(codex_path.parent().unwrap()).unwrap();
     let mut config = sample_config(codex_path.clone());
     config.targets.push(TargetConfig {
         id: "gemini".into(),
@@ -611,6 +612,7 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     let outcome = apply_active_selection(&config_path).unwrap();
 
     assert_eq!(outcome.succeeded, 1);
+    assert_eq!(outcome.skipped, 0);
     assert_eq!(outcome.failed, 0);
     assert!(codex_path.exists());
     assert!(!gemini_path.exists());
@@ -619,6 +621,32 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     assert_eq!(
         codex.get("model").and_then(|value| value.as_str()),
         Some("model-active")
+    );
+}
+
+#[test]
+fn apply_active_selection_skips_target_when_tool_dir_missing() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let claude_path = dir.path().join(".claude").join("settings.json");
+    let mut config = sample_config(dir.path().join("unused").join("config.toml"));
+    config.targets = vec![TargetConfig {
+        id: "claude".into(),
+        enabled: true,
+        config_path: Some(claude_path.clone()),
+    }];
+    config.save_with_sidecars(&config_path).unwrap();
+
+    let outcome = apply_active_selection(&config_path).unwrap();
+
+    assert_eq!(outcome.succeeded, 0);
+    assert_eq!(outcome.skipped, 1);
+    assert_eq!(outcome.failed, 0);
+    assert!(!claude_path.exists());
+    assert!(
+        outcome.target_statuses[0]
+            .message
+            .starts_with("skipped:")
     );
 }
 
@@ -650,6 +678,7 @@ fn apply_active_selection_without_api_key_reports_actionable_message() {
     let outcome = state.apply_active_selection().unwrap();
 
     assert_eq!(outcome.succeeded, 0);
+    assert_eq!(outcome.skipped, 0);
     assert_eq!(outcome.failed, 0);
     assert_eq!(
         outcome.message,
