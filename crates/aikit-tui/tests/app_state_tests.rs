@@ -388,7 +388,7 @@ fn e_on_apply_to_does_not_open_provider_modal() {
 }
 
 #[test]
-fn selection_empty_key_and_model_rows_open_add_modals() {
+fn selection_empty_key_row_opens_add_api_key_modal() {
     let config = AikitConfig {
         providers: vec![ProviderConfig {
             id: "provider".into(),
@@ -409,13 +409,35 @@ fn selection_empty_key_and_model_rows_open_add_modals() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
     assert!(matches!(state.modal_state, ModalState::ApiKeyForm(_)));
+}
 
-    state.cancel_modal();
-    state.select_next();
-    handle_key(
+#[test]
+fn m_opens_add_model_modal_without_list_row() {
+    let config = AikitConfig {
+        providers: vec![ProviderConfig {
+            id: "provider".into(),
+            name: "Provider".into(),
+            base_url: "https://example.com/v1".into(),
+            enabled: true,
+            api_keys: vec![ApiKeyConfig {
+                id: "key".into(),
+                name: "Key".into(),
+                value: "sk-test".into(),
+            }],
+            manual_models: Vec::new(),
+            models_cache: None,
+        }],
+        ..AikitConfig::default()
+    };
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+
+    let action = handle_key(
         &mut state,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE),
     );
+
+    assert_eq!(action, AppAction::None);
     assert!(matches!(state.modal_state, ModalState::ModelForm(_)));
 }
 
@@ -528,6 +550,7 @@ async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() 
     let mut config = sample_config(dir.path().join("codex").join("config.toml"));
     config.providers[0].base_url = format!("{}/v1", server.uri());
     config.providers[0].models_cache = None;
+    config.providers[0].manual_models.clear();
     config.active_selection = None;
     config.save_with_sidecars(&config_path).unwrap();
 
@@ -538,7 +561,7 @@ async fn refresh_models_uses_selected_provider_and_key_before_model_is_active() 
     let outcome = state.refresh_active_models(&client).await.unwrap();
 
     assert_eq!(outcome.succeeded, 1);
-    assert_eq!(state.selected_model(), Some("model-new"));
+    assert_eq!(state.selected_model(), None);
     let saved = AikitConfig::load_with_sidecars(&config_path).unwrap();
     assert_eq!(
         saved.providers[0]
@@ -744,10 +767,11 @@ fn model_modal_save_adds_manual_model_to_selected_provider() {
     state.set_modal_field("model", "proxy-model").unwrap();
     state.save_modal().unwrap();
 
-    assert_eq!(
-        state.config.providers[0].manual_models,
-        vec!["proxy-model".to_string()]
-    );
+    assert!(state
+        .config
+        .providers[0]
+        .manual_models
+        .contains(&"proxy-model".to_string()));
     assert_eq!(state.selected_model(), Some("proxy-model"));
 }
 
@@ -864,28 +888,6 @@ fn d_in_selection_pane_on_api_key_opens_key_delete_confirmation() {
 }
 
 #[test]
-fn d_on_cached_model_shows_hint_and_no_modal() {
-    // sample_config ships cached (provider-sourced) models only; pressing d on a
-    // cached model row must not open a delete modal.
-    let mut state = AppState::from_config(
-        std::path::PathBuf::from("config.toml"),
-        sample_config(std::path::PathBuf::from("codex.toml")),
-    );
-    state.focused_pane = FocusedPane::Selection;
-    state.select_next();
-    let original_key_count = state.config.providers[0].api_keys.len();
-
-    let action = handle_key(
-        &mut state,
-        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
-    );
-
-    assert_eq!(action, AppAction::None);
-    assert_eq!(state.modal_state, ModalState::None);
-    assert_eq!(state.config.providers[0].api_keys.len(), original_key_count);
-}
-
-#[test]
 fn d_in_applyto_pane_shows_hint_and_no_modal() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
@@ -909,8 +911,6 @@ fn d_on_manual_model_opens_delete_confirmation() {
     let config = sample_config_with_manual_model();
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
     state.focused_pane = FocusedPane::Selection;
-    // selection_items = [ApiKey(0), Model(0)=cached, Model(1)=manual]; land on the manual model.
-    state.select_next();
     state.select_next();
 
     let action = handle_key(
@@ -930,8 +930,6 @@ fn confirm_delete_model_removes_manual_model() {
     let config = sample_config_with_manual_model();
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
     state.focused_pane = FocusedPane::Selection;
-    // selection_items = [ApiKey(0), Model(0)=cached, Model(1)=manual]; land on the manual model.
-    state.select_next();
     state.select_next();
 
     state.open_delete_model_confirmation().unwrap();
@@ -953,7 +951,6 @@ fn delete_model_clears_active_selection_when_it_matches() {
     });
     let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
     state.focused_pane = FocusedPane::Selection;
-    state.select_next();
     state.select_next();
 
     state.open_delete_model_confirmation().unwrap();
@@ -1094,6 +1091,75 @@ fn import_apply_save_failure_keeps_config_unchanged() {
     assert_eq!(state.config, original);
 }
 
+#[test]
+fn slash_opens_model_browser_when_cache_exists() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Selection;
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert!(matches!(state.modal_state, ModalState::ModelBrowser(_)));
+}
+
+#[test]
+fn model_browser_empty_cache_shows_hint() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers[0].models_cache = None;
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.focused_pane = FocusedPane::Selection;
+
+    state.open_model_browser_modal().unwrap();
+
+    assert_eq!(state.modal_state, ModalState::None);
+    assert!(state.status.contains("Refresh models with r first"));
+}
+
+#[test]
+fn model_browser_filters_by_query() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.open_model_browser_modal().unwrap();
+    for ch in "other".chars() {
+        state.model_browser_append_query(ch);
+    }
+
+    assert_eq!(
+        state.model_browser_filtered_models(),
+        vec!["model-other".to_string()]
+    );
+}
+
+#[test]
+fn model_browser_select_adds_manual_model_and_activates() {
+    let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
+    config.providers[0].manual_models.clear();
+    config.active_selection = None;
+    let mut state = AppState::from_config(std::path::PathBuf::from("config.toml"), config);
+    state.open_model_browser_modal().unwrap();
+    state.model_browser_append_query('a');
+    state.confirm_model_browser_selection().unwrap();
+
+    assert_eq!(state.modal_state, ModalState::None);
+    assert!(state
+        .config
+        .providers[0]
+        .manual_models
+        .contains(&"model-active".to_string()));
+    assert_eq!(
+        state.config.active_selection.as_ref().unwrap().model_id,
+        "model-active"
+    );
+}
+
 fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
     AikitConfig {
         providers: vec![ProviderConfig {
@@ -1106,7 +1172,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
                 name: "Key".into(),
                 value: "sk-active".into(),
             }],
-            manual_models: Vec::new(),
+            manual_models: vec!["model-active".into(), "model-other".into()],
             models_cache: Some(ModelCache {
                 refreshed_at: "2026-06-27T00:00:00Z".into(),
                 models: vec!["model-active".into(), "model-other".into()],
@@ -1130,11 +1196,6 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
 
 fn sample_config_with_manual_model() -> AikitConfig {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
-    let provider = &mut config.providers[0];
-    // Keep one cached model so the Selection pane shows [ApiKey, cached model, manual model].
-    if let Some(cache) = provider.models_cache.as_mut() {
-        cache.models.truncate(1);
-    }
-    provider.manual_models = vec!["manual-model".into()];
+    config.providers[0].manual_models = vec!["manual-model".into()];
     config
 }

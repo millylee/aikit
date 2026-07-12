@@ -67,6 +67,42 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             };
         }
 
+        if matches!(state.modal_state, ModalState::ModelBrowser { .. }) {
+            return match key.code {
+                KeyCode::Esc => {
+                    state.cancel_modal();
+                    AppAction::None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    state.model_browser_move_cursor(1);
+                    AppAction::None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    state.model_browser_move_cursor(-1);
+                    AppAction::None
+                }
+                KeyCode::Enter => {
+                    if let Err(err) = state.confirm_model_browser_selection() {
+                        state.set_status(format!("Model browser failed: {err}"));
+                    }
+                    AppAction::None
+                }
+                KeyCode::Backspace => {
+                    state.model_browser_backspace();
+                    AppAction::None
+                }
+                KeyCode::Char(ch) => {
+                    if matches!(key.modifiers, KeyModifiers::NONE | KeyModifiers::SHIFT)
+                        && !ch.is_control()
+                    {
+                        state.model_browser_append_query(ch);
+                    }
+                    AppAction::None
+                }
+                _ => AppAction::None,
+            };
+        }
+
         if matches!(state.modal_state, ModalState::Shortcuts) {
             return match key.code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('?') => {
@@ -175,7 +211,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
                 FocusedPane::Selection => match state.selected_selection_item() {
                     Some(SelectionItem::ApiKey(_)) => state.open_delete_api_key_confirmation(),
                     Some(SelectionItem::Model(_)) => state.open_delete_model_confirmation(),
-                    Some(SelectionItem::AddApiKey | SelectionItem::AddModel) => {
+                    Some(SelectionItem::AddApiKey) => {
                         state.set_status("Nothing to delete on this row");
                         Ok(())
                     }
@@ -202,6 +238,12 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
         }
         (KeyCode::Char('m'), _) => {
             if let Err(err) = state.open_add_model_modal() {
+                state.set_status(format!("Open modal failed: {err}"));
+            }
+            AppAction::None
+        }
+        (KeyCode::Char('/'), _) if state.focused_pane == FocusedPane::Selection => {
+            if let Err(err) = state.open_model_browser_modal() {
                 state.set_status(format!("Open modal failed: {err}"));
             }
             AppAction::None

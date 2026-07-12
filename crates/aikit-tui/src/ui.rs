@@ -188,58 +188,24 @@ fn selection_lines(state: &AppState) -> SelectionLines {
     } else {
         key_count
     };
-    let cached_models = provider
-        .models_cache
-        .as_ref()
-        .map(|cache| cache.models.as_slice())
-        .unwrap_or(&[]);
-    if cached_models.is_empty() && provider.manual_models.is_empty() {
-        let cursor = if state.detail_index() == model_start_index {
+
+    for (index, model) in provider.manual_models.iter().enumerate() {
+        let detail_index = model_start_index + index;
+        let cursor = if state.detail_index() == detail_index {
             ">"
         } else {
             " "
         };
-        if state.detail_index() == model_start_index {
+        if state.detail_index() == detail_index {
             selected_line_index = Some(lines.len());
         }
-        lines.push(format!("{cursor} Add model (m)"));
-    } else {
-        for (index, model) in cached_models.iter().enumerate() {
-            let detail_index = model_start_index + index;
-            let cursor = if state.detail_index() == detail_index {
-                ">"
-            } else {
-                " "
-            };
-            if state.detail_index() == detail_index {
-                selected_line_index = Some(lines.len());
-            }
-            let active_model = active
-                .filter(|selection| {
-                    selection.provider_id == provider.id && selection.model_id == *model
-                })
-                .map(|_| "*")
-                .unwrap_or(" ");
-            lines.push(format!("{cursor}{active_model} {model}"));
-        }
-        for (index, model) in provider.manual_models.iter().enumerate() {
-            let detail_index = model_start_index + cached_models.len() + index;
-            let cursor = if state.detail_index() == detail_index {
-                ">"
-            } else {
-                " "
-            };
-            if state.detail_index() == detail_index {
-                selected_line_index = Some(lines.len());
-            }
-            let active_model = active
-                .filter(|selection| {
-                    selection.provider_id == provider.id && selection.model_id == *model
-                })
-                .map(|_| "*")
-                .unwrap_or(" ");
-            lines.push(format!("{cursor}{active_model} {model}  manual"));
-        }
+        let active_model = active
+            .filter(|selection| {
+                selection.provider_id == provider.id && selection.model_id == *model
+            })
+            .map(|_| "*")
+            .unwrap_or(" ");
+        lines.push(format!("{cursor}{active_model} {model}"));
     }
 
     SelectionLines {
@@ -313,7 +279,12 @@ fn target_display_name(target_id: &str) -> &str {
 }
 
 fn render_modal(frame: &mut Frame, state: &AppState) {
-    let area = centered_rect(70, 50, frame.area());
+    let (percent_x, percent_y) = match &state.modal_state {
+        ModalState::ModelBrowser(_) => (80, 70),
+        ModalState::Shortcuts => (80, 80),
+        _ => (70, 50),
+    };
+    let area = centered_rect(percent_x, percent_y, frame.area());
     match &state.modal_state {
         ModalState::None => {}
         ModalState::ProviderForm(form) => {
@@ -497,6 +468,30 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             lines.push("Space toggle, Up/Down move, Enter import selected, Esc cancel".into());
             render_modal_text(frame, area, "Import Candidates", lines.join("\n"));
         }
+        ModalState::ModelBrowser(browser) => {
+            let filtered = state.model_browser_filtered_models();
+            let mut lines = vec![
+                format!("Search: [ {} ]", browser.query),
+                String::new(),
+            ];
+            if filtered.is_empty() {
+                if browser.query.is_empty() {
+                    lines.push("No cached models available.".into());
+                } else {
+                    lines.push(format!("No models match \"{}\".", browser.query));
+                }
+            } else {
+                for (index, model) in filtered.iter().enumerate() {
+                    let cursor_mark = if index == browser.cursor { ">" } else { " " };
+                    lines.push(format!("{cursor_mark} {model}"));
+                }
+            }
+            lines.push(String::new());
+            lines.push(
+                "Type to filter, Up/Down move, Enter select, Esc cancel".into(),
+            );
+            render_modal_text(frame, area, "Browse Models", lines.join("\n"));
+        }
         ModalState::Shortcuts => {
             render_modal_text(frame, area, "Shortcuts", shortcuts_text());
         }
@@ -602,11 +597,14 @@ fn shortcuts_text() -> String {
         "Providers / Selection / Apply To:",
         "  a: add provider",
         "  +: add API key",
-        "  m: add manual model",
         "  e: edit selected provider, API key, or model",
         "  d: delete selected provider, API key, or manual model",
-        "  r: refresh models",
         "  Ctrl+s: apply active selection to enabled targets",
+        "",
+        "Models:",
+        "  r: refresh models from selected provider",
+        "  m: add custom model id",
+        "  /: browse and search provider models",
         "",
         "Modal forms:",
         "  Tab/Shift+Tab/Up/Down: switch input fields",
@@ -690,24 +688,24 @@ mod tests {
         assert!(text.contains("Provider: Provider"));
         assert!(text.contains("Base URL: https://example.com/v1"));
         assert!(text.contains("Key (sk-a...7890)"));
-        assert!(text.contains("manual-model  manual"));
+        assert!(text.contains("manual-model"));
+        assert!(!text.contains("cached-model"));
+        assert!(!text.contains("Add model"));
+        assert!(!text.contains("Browse models"));
         assert!(!text.contains("Cache refreshed"));
         assert!(!text.contains("Last refresh error"));
     }
 
     #[test]
-    fn selection_pane_scrolls_to_keep_selected_model_visible() {
+    fn selection_pane_scrolls_to_keep_selected_manual_model_visible() {
         let mut config = sample_config();
-        config.providers[0].models_cache = Some(ModelCache {
-            refreshed_at: "2026-06-28T00:00:00Z".into(),
-            models: (0..30).map(|index| format!("model-{index:02}")).collect(),
-            last_error: None,
-        });
-        config.providers[0].manual_models.clear();
+        config.providers[0].manual_models = (0..30)
+            .map(|index| format!("manual-{index:02}"))
+            .collect();
         config.active_selection = Some(ActiveSelection {
             provider_id: "provider".into(),
             api_key_id: "key".into(),
-            model_id: "model-25".into(),
+            model_id: "manual-25".into(),
         });
         let mut state = AppState::from_config(PathBuf::from("config.toml"), config);
         state.focused_pane = FocusedPane::Selection;
@@ -717,8 +715,8 @@ mod tests {
 
         let text = selection_text_for_height(&state, 8);
 
-        assert!(text.contains("model-25"));
-        assert!(!text.contains("model-00"));
+        assert!(text.contains("manual-25"));
+        assert!(!text.contains("manual-00"));
         assert!(text.contains("..."));
     }
 
@@ -779,6 +777,8 @@ mod tests {
 
         assert!(text.contains("?: show shortcuts"));
         assert!(text.contains("u: check for updates"));
+        assert!(text.contains("r: refresh models from selected provider"));
+        assert!(text.contains("/: browse and search provider models"));
         assert!(text.contains("Ctrl+U: clear current input"));
     }
 

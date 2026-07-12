@@ -93,6 +93,7 @@ pub enum ModalState {
         warnings: Vec<String>,
         persist_skip: bool,
     },
+    ModelBrowser(ModelBrowserState),
     Shortcuts,
 }
 
@@ -120,7 +121,6 @@ pub enum SelectionItem {
     ApiKey(usize),
     Model(usize),
     AddApiKey,
-    AddModel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,6 +147,13 @@ pub struct ModelFormState {
     pub cursor: usize,
     pub model: String,
     pub validation_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelBrowserState {
+    pub provider_id: String,
+    pub query: String,
+    pub cursor: usize,
 }
 
 impl Default for AppState {
@@ -224,7 +231,9 @@ impl AppState {
     pub fn modal_is_confirmation(&self) -> bool {
         matches!(
             self.modal_state,
-            ModalState::ConfirmDeleteProvider { .. } | ModalState::ConfirmDeleteApiKey { .. }
+            ModalState::ConfirmDeleteProvider { .. }
+                | ModalState::ConfirmDeleteApiKey { .. }
+                | ModalState::ConfirmDeleteModel { .. }
         )
     }
 
@@ -307,6 +316,129 @@ impl AppState {
         Ok(())
     }
 
+    pub fn open_model_browser_modal(&mut self) -> Result<()> {
+        let provider = self
+            .selected_provider()
+            .ok_or_else(|| AikitError::ConfigParse("no provider selected".into()))?;
+        let cached_count = provider
+            .models_cache
+            .as_ref()
+            .map(|cache| cache.models.len())
+            .unwrap_or(0);
+        if cached_count == 0 {
+            self.set_status("Refresh models with r first");
+            return Ok(());
+        }
+        self.modal_state = ModalState::ModelBrowser(ModelBrowserState {
+            provider_id: provider.id.clone(),
+            query: String::new(),
+            cursor: 0,
+        });
+        Ok(())
+    }
+
+    pub fn model_browser_filtered_models(&self) -> Vec<String> {
+        let ModalState::ModelBrowser(browser) = &self.modal_state else {
+            return Vec::new();
+        };
+        let Some(provider) = self
+            .config
+            .providers
+            .iter()
+            .find(|provider| provider.id == browser.provider_id)
+        else {
+            return Vec::new();
+        };
+        model_browser_filtered_models(provider, &browser.query)
+    }
+
+    pub fn model_browser_move_cursor(&mut self, delta: isize) {
+        let ModalState::ModelBrowser(browser) = &mut self.modal_state else {
+            return;
+        };
+        let filtered_len = self
+            .config
+            .providers
+            .iter()
+            .find(|provider| provider.id == browser.provider_id)
+            .map(|provider| model_browser_filtered_models(provider, &browser.query).len())
+            .unwrap_or(0);
+        if filtered_len == 0 {
+            browser.cursor = 0;
+            return;
+        }
+        let next = browser.cursor as isize + delta;
+        let wrapped = ((next % filtered_len as isize) + filtered_len as isize) as usize % filtered_len;
+        browser.cursor = wrapped;
+    }
+
+    pub fn model_browser_append_query(&mut self, ch: char) {
+        let ModalState::ModelBrowser(browser) = &mut self.modal_state else {
+            return;
+        };
+        browser.query.push(ch);
+        browser.cursor = 0;
+    }
+
+    pub fn model_browser_backspace(&mut self) {
+        let ModalState::ModelBrowser(browser) = &mut self.modal_state else {
+            return;
+        };
+        browser.query.pop();
+        browser.cursor = 0;
+    }
+
+    pub fn confirm_model_browser_selection(&mut self) -> Result<()> {
+        let ModalState::ModelBrowser(browser) = self.modal_state.clone() else {
+            return Err(AikitError::Provider(
+                "model browser is not open, cannot confirm selection".into(),
+            ));
+        };
+        let provider = self
+            .config
+            .providers
+            .iter()
+            .find(|provider| provider.id == browser.provider_id)
+            .ok_or_else(|| {
+                AikitError::Provider(format!("provider not found: {}", browser.provider_id))
+            })?;
+        let filtered = model_browser_filtered_models(provider, &browser.query);
+        let Some(model) = filtered.get(browser.cursor) else {
+            self.set_status("No model matches the current filter");
+            return Ok(());
+        };
+        let model = model.clone();
+        let provider_id = browser.provider_id.clone();
+        let api_key_id = provider
+            .api_keys
+            .get(self.key_index)
+            .map(|key| key.id.clone())
+            .ok_or_else(|| AikitError::ConfigParse("no api key selected".into()))?;
+
+        let mut next_config = self.config.clone();
+        let provider = next_config
+            .providers
+            .iter_mut()
+            .find(|provider| provider.id == provider_id)
+            .ok_or_else(|| {
+                AikitError::Provider(format!("provider not found: {provider_id}"))
+            })?;
+        if !provider.manual_models.iter().any(|manual| manual == &model) {
+            provider.manual_models.push(model.clone());
+        }
+        next_config.active_selection = Some(ActiveSelection {
+            provider_id: provider_id.clone(),
+            api_key_id,
+            model_id: model.clone(),
+        });
+        self.persist_config_if_file_backed_config(&next_config)?;
+        self.config = next_config;
+        self.normalize_selection_indices();
+        self.modal_state = ModalState::None;
+        self.set_status(format!("Added and selected model {model}"));
+        Ok(())
+    }
+
     pub fn open_add_model_modal(&mut self) -> Result<()> {
         let provider_id = self
             .selected_provider()
@@ -375,13 +507,6 @@ impl AppState {
         let model = provider_model_at(provider, model_index)
             .ok_or_else(|| AikitError::ConfigParse("no model selected".into()))?
             .to_string();
-
-        if provider.manual_models.iter().all(|manual| manual != &model) {
-            self.set_status(format!(
-                "Model '{model}' comes from the provider; refresh models to update it"
-            ));
-            return Ok(());
-        }
 
         self.modal_state = ModalState::ConfirmDeleteModel {
             provider_id: provider.id.clone(),
@@ -997,7 +1122,6 @@ impl AppState {
                 Some(SelectionItem::ApiKey(_)) => self.open_edit_api_key_modal(),
                 Some(SelectionItem::Model(_)) => self.open_edit_model_modal(),
                 Some(SelectionItem::AddApiKey) => self.open_add_api_key_modal(),
-                Some(SelectionItem::AddModel) => self.open_add_model_modal(),
                 None => {
                     self.set_status("Select an API key or model to edit");
                     Ok(())
@@ -1178,12 +1302,7 @@ impl AppState {
             items.extend((0..provider.api_keys.len()).map(SelectionItem::ApiKey));
         }
 
-        let model_count = provider_model_count(provider);
-        if model_count == 0 {
-            items.push(SelectionItem::AddModel);
-        } else {
-            items.extend((0..model_count).map(SelectionItem::Model));
-        }
+        items.extend((0..provider.manual_models.len()).map(SelectionItem::Model));
         items
     }
 
@@ -1195,7 +1314,7 @@ impl AppState {
             Some(SelectionItem::Model(index)) => {
                 self.model_index = index;
             }
-            Some(SelectionItem::AddApiKey | SelectionItem::AddModel) | None => {}
+            Some(SelectionItem::AddApiKey) | None => {}
         }
     }
 
@@ -1206,11 +1325,6 @@ impl AppState {
             }
             Some(SelectionItem::AddApiKey) => {
                 if let Err(err) = self.open_add_api_key_modal() {
-                    self.set_status(format!("Open modal failed: {err}"));
-                }
-            }
-            Some(SelectionItem::AddModel) => {
-                if let Err(err) = self.open_add_model_modal() {
                     self.set_status(format!("Open modal failed: {err}"));
                 }
             }
@@ -1257,8 +1371,8 @@ impl AppState {
         if provider.api_keys.is_empty() {
             return Some("Add an API key with + before applying targets");
         }
-        if provider_model_count(provider) == 0 {
-            return Some("Refresh models with r or add a model with m before applying targets");
+        if provider.manual_models.is_empty() {
+            return Some("Add a model with m or browse models with / before applying targets");
         }
         Some("Select provider, API key, and model with Enter before applying targets")
     }
@@ -1784,51 +1898,35 @@ fn load_or_default(config_path: &Path) -> Result<AikitConfig> {
 }
 
 fn provider_model_count(provider: &ProviderConfig) -> usize {
-    provider
-        .models_cache
-        .as_ref()
-        .map(|cache| cache.models.len())
-        .unwrap_or(0)
-        + provider.manual_models.len()
+    provider.manual_models.len()
 }
 
 fn provider_model_at(provider: &ProviderConfig, index: usize) -> Option<&str> {
-    let cached_count = provider
-        .models_cache
-        .as_ref()
-        .map(|cache| cache.models.len())
-        .unwrap_or(0);
-    if index < cached_count {
-        return provider
-            .models_cache
-            .as_ref()
-            .and_then(|cache| cache.models.get(index))
-            .map(String::as_str);
-    }
-    provider
-        .manual_models
-        .get(index.saturating_sub(cached_count))
-        .map(String::as_str)
+    provider.manual_models.get(index).map(String::as_str)
 }
 
 fn provider_model_position(provider: &ProviderConfig, model_id: &str) -> Option<usize> {
-    let cached_count = provider
-        .models_cache
-        .as_ref()
-        .map(|cache| cache.models.len())
-        .unwrap_or(0);
-    if let Some(index) = provider
-        .models_cache
-        .as_ref()
-        .and_then(|cache| cache.models.iter().position(|model| model == model_id))
-    {
-        return Some(index);
-    }
     provider
         .manual_models
         .iter()
         .position(|model| model == model_id)
-        .map(|index| cached_count + index)
+}
+
+fn model_browser_filtered_models(provider: &ProviderConfig, query: &str) -> Vec<String> {
+    let models = provider
+        .models_cache
+        .as_ref()
+        .map(|cache| cache.models.as_slice())
+        .unwrap_or(&[]);
+    if query.is_empty() {
+        return models.to_vec();
+    }
+    let query = query.to_ascii_lowercase();
+    models
+        .iter()
+        .filter(|model| model.to_ascii_lowercase().contains(&query))
+        .cloned()
+        .collect()
 }
 
 fn next_api_key_identity(provider: &ProviderConfig) -> (String, String) {
