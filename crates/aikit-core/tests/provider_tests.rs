@@ -2,7 +2,6 @@ use aikit_core::{
     cache::refresh_models,
     config::{ApiKeyConfig, ModelCache, ProviderConfig},
     provider::OpenAiCompatibleClient,
-    AikitError,
 };
 use wiremock::{
     matchers::{method, path},

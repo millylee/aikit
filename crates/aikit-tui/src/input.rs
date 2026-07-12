@@ -14,10 +14,16 @@ pub enum AppAction {
 
 pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
     if state.is_modal_open() {
-        if matches!(state.modal_state, ModalState::UpdatePrompt { .. }) {
+        if matches!(
+            state.modal_state,
+            ModalState::UpdatePrompt { .. } | ModalState::UpdateProgress
+        ) {
             return match key.code {
-                KeyCode::Enter => AppAction::ApplyUpdate,
-                KeyCode::Esc => {
+                KeyCode::Enter if matches!(state.modal_state, ModalState::UpdatePrompt { .. }) => {
+                    state.begin_update_apply();
+                    AppAction::ApplyUpdate
+                }
+                KeyCode::Esc if matches!(state.modal_state, ModalState::UpdatePrompt { .. }) => {
                     if let Err(err) = state.skip_update_prompt() {
                         state.set_status(format!("Update failed: {err}"));
                     }

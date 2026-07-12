@@ -1,8 +1,8 @@
 use std::io::Write;
 
 use aikit_core::updater::{
-    binary_file_name, check_for_updates, download_and_stage, parse_sha256_file, release_archive_name,
-    version_is_newer,
+    binary_file_name, check_for_updates, download_and_stage, parse_sha256_file,
+    release_archive_name, version_is_newer,
 };
 use flate2::{write::GzEncoder, Compression};
 use sha2::{Digest, Sha256};
@@ -26,8 +26,7 @@ fn archive_fixture() -> (Vec<u8>, String, String) {
             writer
                 .start_file(
                     binary_name,
-                    SimpleFileOptions::default()
-                        .compression_method(zip::CompressionMethod::Stored),
+                    SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
                 )
                 .unwrap();
             writer.write_all(payload).unwrap();
@@ -65,7 +64,10 @@ fn version_is_newer_compares_semver_like_parts() {
 #[test]
 fn parse_sha256_file_reads_release_checksum_format() {
     let parsed = parse_sha256_file("abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234  aikit-x86_64-pc-windows-msvc.zip\n").unwrap();
-    assert_eq!(parsed, "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234");
+    assert_eq!(
+        parsed,
+        "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+    );
 }
 
 #[tokio::test]
@@ -117,9 +119,7 @@ async fn download_and_stage_verifies_checksum_and_extracts_binary() {
 
     Mock::given(method("GET"))
         .and(path("/archive"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_bytes(archive_bytes),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(archive_bytes))
         .mount(&server)
         .await;
 
@@ -138,6 +138,9 @@ async fn download_and_stage_verifies_checksum_and_extracts_binary() {
     .unwrap();
 
     assert!(staged.exists());
-    assert_eq!(staged.file_name().and_then(|name| name.to_str()), Some(binary_file_name()));
+    assert_eq!(
+        staged.file_name().and_then(|name| name.to_str()),
+        Some(binary_file_name())
+    );
     assert_eq!(std::fs::read(staged).unwrap(), b"updated-aikit-binary");
 }

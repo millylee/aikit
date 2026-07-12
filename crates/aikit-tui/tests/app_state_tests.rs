@@ -53,6 +53,49 @@ fn r_requests_model_refresh() {
 }
 
 #[test]
+fn update_prompt_enter_shows_progress_before_apply() {
+    let mut state = AppState::default();
+    state
+        .open_update_prompt_from_outcome(UpdateCheckOutcome {
+            current_version: env!("CARGO_PKG_VERSION").into(),
+            latest_version: "9.9.9".into(),
+            update_available: true,
+            message: "Update available".into(),
+        })
+        .unwrap();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::ApplyUpdate);
+    assert_eq!(state.modal_state, ModalState::UpdateProgress);
+    assert_eq!(state.status, "Downloading update...");
+}
+
+#[test]
+fn update_progress_ignores_escape() {
+    let mut state = AppState::default();
+    state.modal_state = ModalState::UpdateProgress;
+
+    let action = handle_key(&mut state, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert_eq!(action, AppAction::None);
+    assert_eq!(state.modal_state, ModalState::UpdateProgress);
+}
+
+#[test]
+fn finish_update_apply_closes_progress_modal() {
+    let mut state = AppState::default();
+    state.modal_state = ModalState::UpdateProgress;
+
+    state.finish_update_apply();
+
+    assert_eq!(state.modal_state, ModalState::None);
+}
+
+#[test]
 fn format_refresh_error_keeps_short_provider_messages() {
     let err = AikitError::Provider("authentication or permission problem".into());
     let message = format_refresh_error(&err);
@@ -216,26 +259,6 @@ fn startup_update_prompt_skip_stores_skipped_version() {
         saved.update_prompt.skipped_version.as_deref(),
         Some("9.9.9")
     );
-}
-
-#[test]
-fn update_prompt_enter_requests_apply_update() {
-    let mut state = AppState::default();
-    state
-        .open_update_prompt_from_outcome(UpdateCheckOutcome {
-            current_version: env!("CARGO_PKG_VERSION").into(),
-            latest_version: "9.9.9".into(),
-            update_available: true,
-            message: "Update available".into(),
-        })
-        .unwrap();
-
-    let action = handle_key(
-        &mut state,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-    );
-
-    assert_eq!(action, AppAction::ApplyUpdate);
 }
 
 #[test]
@@ -867,9 +890,7 @@ fn model_modal_save_adds_manual_model_to_selected_provider() {
     state.set_modal_field("model", "proxy-model").unwrap();
     state.save_modal().unwrap();
 
-    assert!(state
-        .config
-        .providers[0]
+    assert!(state.config.providers[0]
         .manual_models
         .contains(&"proxy-model".to_string()));
     assert_eq!(state.selected_model(), Some("proxy-model"));
@@ -1249,9 +1270,7 @@ fn model_browser_select_adds_manual_model_and_activates() {
     state.confirm_model_browser_selection().unwrap();
 
     assert_eq!(state.modal_state, ModalState::None);
-    assert!(state
-        .config
-        .providers[0]
+    assert!(state.config.providers[0]
         .manual_models
         .contains(&"model-active".to_string()));
     assert_eq!(

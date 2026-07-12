@@ -90,6 +90,7 @@ pub enum ModalState {
         latest_version: String,
         persist_skip: bool,
     },
+    UpdateProgress,
     Shortcuts,
 }
 
@@ -364,7 +365,8 @@ impl AppState {
             return;
         }
         let next = browser.cursor as isize + delta;
-        let wrapped = ((next % filtered_len as isize) + filtered_len as isize) as usize % filtered_len;
+        let wrapped =
+            ((next % filtered_len as isize) + filtered_len as isize) as usize % filtered_len;
         browser.cursor = wrapped;
     }
 
@@ -416,9 +418,7 @@ impl AppState {
             .providers
             .iter_mut()
             .find(|provider| provider.id == provider_id)
-            .ok_or_else(|| {
-                AikitError::Provider(format!("provider not found: {provider_id}"))
-            })?;
+            .ok_or_else(|| AikitError::Provider(format!("provider not found: {provider_id}")))?;
         if !provider.manual_models.iter().any(|manual| manual == &model) {
             provider.manual_models.push(model.clone());
         }
@@ -1176,10 +1176,7 @@ impl AppState {
         if !outcome.update_available {
             return false;
         }
-        self.config
-            .update_prompt
-            .skipped_version
-            .as_deref()
+        self.config.update_prompt.skipped_version.as_deref()
             != Some(outcome.latest_version.as_str())
     }
 
@@ -1230,6 +1227,19 @@ impl AppState {
         self.modal_state = ModalState::None;
         self.set_status("Skipped update prompt");
         Ok(())
+    }
+
+    pub fn begin_update_apply(&mut self) {
+        if matches!(self.modal_state, ModalState::UpdatePrompt { .. }) {
+            self.modal_state = ModalState::UpdateProgress;
+            self.set_status("Downloading update...");
+        }
+    }
+
+    pub fn finish_update_apply(&mut self) {
+        if matches!(self.modal_state, ModalState::UpdateProgress) {
+            self.modal_state = ModalState::None;
+        }
     }
 
     pub async fn apply_update(

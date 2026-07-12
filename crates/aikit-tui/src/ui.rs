@@ -470,10 +470,7 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
         }
         ModalState::ModelBrowser(browser) => {
             let filtered = state.model_browser_filtered_models();
-            let mut lines = vec![
-                format!("Search: [ {} ]", browser.query),
-                String::new(),
-            ];
+            let mut lines = vec![format!("Search: [ {} ]", browser.query), String::new()];
             if filtered.is_empty() {
                 if browser.query.is_empty() {
                     lines.push("No cached models available.".into());
@@ -487,9 +484,7 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 }
             }
             lines.push(String::new());
-            lines.push(
-                "Type to filter, Up/Down move, Enter select, Esc cancel".into(),
-            );
+            lines.push("Type to filter, Up/Down move, Enter select, Esc cancel".into());
             render_modal_text(frame, area, "Browse Models", lines.join("\n"));
         }
         ModalState::UpdatePrompt {
@@ -501,6 +496,14 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
                 "Current: v{current_version}\nLatest:  v{latest_version}\n\nEnter install update and restart\nEsc skip this version"
             );
             render_modal_text(frame, area, "Update Available", text);
+        }
+        ModalState::UpdateProgress => {
+            render_modal_text(
+                frame,
+                area,
+                "Installing Update",
+                "Downloading update...\nPlease wait.".into(),
+            );
         }
         ModalState::Shortcuts => {
             render_modal_text(frame, area, "Shortcuts", shortcuts_text());
@@ -709,9 +712,8 @@ mod tests {
     #[test]
     fn selection_pane_scrolls_to_keep_selected_manual_model_visible() {
         let mut config = sample_config();
-        config.providers[0].manual_models = (0..30)
-            .map(|index| format!("manual-{index:02}"))
-            .collect();
+        config.providers[0].manual_models =
+            (0..30).map(|index| format!("manual-{index:02}")).collect();
         config.active_selection = Some(ActiveSelection {
             provider_id: "provider".into(),
             api_key_id: "key".into(),

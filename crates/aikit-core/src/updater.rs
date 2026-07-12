@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{copy},
+    io::copy,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -101,7 +101,10 @@ pub fn parse_sha256_file(content: &str) -> Result<String> {
     Ok(hash.to_ascii_lowercase())
 }
 
-pub async fn check_for_updates(client: &Client, latest_release_url: &str) -> Result<UpdateCheckOutcome> {
+pub async fn check_for_updates(
+    client: &Client,
+    latest_release_url: &str,
+) -> Result<UpdateCheckOutcome> {
     let release = fetch_latest_release(client, latest_release_url).await?;
     let latest_version = normalize_release_tag(&release.tag_name);
     if latest_version.is_empty() {
@@ -126,7 +129,10 @@ pub async fn check_for_updates(client: &Client, latest_release_url: &str) -> Res
     })
 }
 
-pub async fn fetch_release_assets(client: &Client, latest_release_url: &str) -> Result<ReleaseAssets> {
+pub async fn fetch_release_assets(
+    client: &Client,
+    latest_release_url: &str,
+) -> Result<ReleaseAssets> {
     let release = fetch_latest_release(client, latest_release_url).await?;
     let archive_name = release_archive_name()?;
     let checksum_name = format!("{archive_name}.sha256");
@@ -137,9 +143,7 @@ pub async fn fetch_release_assets(client: &Client, latest_release_url: &str) -> 
         .find(|asset| asset.name == archive_name)
         .map(|asset| asset.browser_download_url.clone())
         .ok_or_else(|| {
-            AikitError::Provider(format!(
-                "release does not include asset `{archive_name}`"
-            ))
+            AikitError::Provider(format!("release does not include asset `{archive_name}`"))
         })?;
 
     let checksum_url = release
@@ -148,9 +152,7 @@ pub async fn fetch_release_assets(client: &Client, latest_release_url: &str) -> 
         .find(|asset| asset.name == checksum_name)
         .map(|asset| asset.browser_download_url.clone())
         .ok_or_else(|| {
-            AikitError::Provider(format!(
-                "release does not include asset `{checksum_name}`"
-            ))
+            AikitError::Provider(format!("release does not include asset `{checksum_name}`"))
         })?;
 
     Ok(ReleaseAssets {
@@ -173,7 +175,10 @@ pub async fn download_and_stage(client: &Client, latest_release_url: &str) -> Re
     extract_binary_from_archive(&archive_bytes, &assets.archive_name)
 }
 
-pub async fn perform_update(client: &Client, latest_release_url: &str) -> Result<UpdateApplyOutcome> {
+pub async fn perform_update(
+    client: &Client,
+    latest_release_url: &str,
+) -> Result<UpdateApplyOutcome> {
     let staged = download_and_stage(client, latest_release_url).await?;
     let target = std::env::current_exe().map_err(AikitError::Io)?;
 
@@ -219,13 +224,7 @@ pub fn spawn_windows_replacer(staged: &Path, target: &Path) -> Result<()> {
         "Start-Sleep -Seconds 1; Copy-Item -LiteralPath '{staged}' -Destination '{target}' -Force"
     );
     Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            &script,
-        ])
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
         .spawn()
         .map_err(AikitError::Io)?;
     Ok(())
@@ -238,7 +237,10 @@ pub fn spawn_windows_replacer(_staged: &Path, _target: &Path) -> Result<()> {
     ))
 }
 
-async fn fetch_latest_release(client: &Client, latest_release_url: &str) -> Result<GithubLatestRelease> {
+async fn fetch_latest_release(
+    client: &Client,
+    latest_release_url: &str,
+) -> Result<GithubLatestRelease> {
     client
         .get(latest_release_url)
         .header("User-Agent", "aikit")
@@ -279,10 +281,8 @@ fn verify_sha256(bytes: &[u8], expected: &str) -> Result<()> {
 }
 
 fn extract_binary_from_archive(bytes: &[u8], archive_name: &str) -> Result<PathBuf> {
-    let extract_dir = std::env::temp_dir().join(format!(
-        "aikit-update-extract-{}",
-        std::process::id()
-    ));
+    let extract_dir =
+        std::env::temp_dir().join(format!("aikit-update-extract-{}", std::process::id()));
     fs::create_dir_all(&extract_dir)?;
     let binary_name = binary_file_name();
 
@@ -303,10 +303,7 @@ fn extract_binary_from_archive(bytes: &[u8], archive_name: &str) -> Result<PathB
         )));
     }
 
-    let persistent_dir = std::env::temp_dir().join(format!(
-        "aikit-update-{}",
-        std::process::id()
-    ));
+    let persistent_dir = std::env::temp_dir().join(format!("aikit-update-{}", std::process::id()));
     fs::create_dir_all(&persistent_dir)?;
     let persistent_path = persistent_dir.join(binary_name);
     fs::copy(&staged, &persistent_path)?;
@@ -333,8 +330,8 @@ fn extract_tar_gz(bytes: &[u8], dest: &Path, binary_name: &str) -> Result<()> {
         .entries()
         .map_err(|err| AikitError::Provider(format!("tar extract failed: {err}")))?
     {
-        let mut entry = entry
-            .map_err(|err| AikitError::Provider(format!("tar extract failed: {err}")))?;
+        let mut entry =
+            entry.map_err(|err| AikitError::Provider(format!("tar extract failed: {err}")))?;
         let path = entry
             .path()
             .map_err(|err| AikitError::Provider(format!("tar extract failed: {err}")))?;

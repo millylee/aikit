@@ -107,8 +107,7 @@ async fn run_app(
                             state.set_status("Checking for updates...");
                             match state.check_updates(http_client, LATEST_RELEASE_URL).await {
                                 Ok(outcome) if outcome.update_available => {
-                                    if let Err(err) =
-                                        state.open_update_prompt_from_outcome(outcome)
+                                    if let Err(err) = state.open_update_prompt_from_outcome(outcome)
                                     {
                                         state.set_status(format!("Update prompt failed: {err}"));
                                     }
@@ -118,15 +117,21 @@ async fn run_app(
                             }
                         }
                         AppAction::ApplyUpdate => {
-                            state.set_status("Downloading update...");
+                            terminal.draw(|frame| ui::render(frame, state))?;
                             match state.apply_update(http_client, LATEST_RELEASE_URL).await {
                                 Ok(outcome) => {
+                                    state.finish_update_apply();
                                     state.set_status(outcome.message);
+                                    terminal.draw(|frame| ui::render(frame, state))?;
                                     if outcome.quit_after {
                                         break;
                                     }
                                 }
-                                Err(err) => state.set_status(format!("Update failed: {err}")),
+                                Err(err) => {
+                                    state.finish_update_apply();
+                                    state.set_status(format!("Update failed: {err}"));
+                                    terminal.draw(|frame| ui::render(frame, state))?;
+                                }
                             }
                         }
                     }

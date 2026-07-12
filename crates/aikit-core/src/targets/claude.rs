@@ -71,10 +71,7 @@ impl ClaudeWriter {
             Value::String(selection.base_url.clone()),
         );
         env_object.remove("ANTHROPIC_MODEL");
-        object.insert(
-            "model".into(),
-            Value::String(selection.model.clone()),
-        );
+        object.insert("model".into(), Value::String(selection.model.clone()));
 
         let content = serde_json::to_string_pretty(&value).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize claude config: {err}"))

@@ -48,9 +48,7 @@ impl OpenAiCompatibleClient {
         let body: ModelListResponse = response
             .json()
             .await
-            .map_err(|_| {
-                AikitError::Provider("invalid model response from provider".into())
-            })?;
+            .map_err(|_| AikitError::Provider("invalid model response from provider".into()))?;
         Ok(body.data.into_iter().map(|model| model.id).collect())
     }
 }
