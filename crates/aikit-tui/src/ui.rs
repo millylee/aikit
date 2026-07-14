@@ -127,7 +127,53 @@ fn selection_text(state: &AppState) -> String {
 
 fn selection_text_for_height(state: &AppState, visible_rows: usize) -> String {
     let selection = selection_lines(state);
-    visible_selection_lines(selection.lines, selection.selected_line_index, visible_rows).join("\n")
+    visible_lines_around_index(selection.lines, selection.selected_line_index, visible_rows)
+        .join("\n")
+}
+
+const MODEL_BROWSER_HEADER_ROWS: usize = 2;
+const MODEL_BROWSER_FOOTER_ROWS: usize = 2;
+const MODEL_BROWSER_HELP: &str = "Type to filter, Up/Down move, Enter select, Esc cancel";
+
+#[cfg(test)]
+fn model_browser_text(state: &AppState) -> String {
+    model_browser_text_for_height(state, usize::MAX)
+}
+
+fn model_browser_text_for_height(state: &AppState, visible_height: usize) -> String {
+    let ModalState::ModelBrowser(browser) = &state.modal_state else {
+        return String::new();
+    };
+    let filtered = state.model_browser_filtered_models();
+    let mut lines = vec![format!("Search: [ {} ]", browser.query), String::new()];
+
+    if filtered.is_empty() {
+        if browser.query.is_empty() {
+            lines.push("No cached models available.".into());
+        } else {
+            lines.push(format!("No models match \"{}\".", browser.query));
+        }
+    } else {
+        let model_lines = filtered
+            .iter()
+            .enumerate()
+            .map(|(index, model)| {
+                let cursor_mark = if index == browser.cursor { ">" } else { " " };
+                format!("{cursor_mark} {model}")
+            })
+            .collect::<Vec<_>>();
+        let list_rows =
+            visible_height.saturating_sub(MODEL_BROWSER_HEADER_ROWS + MODEL_BROWSER_FOOTER_ROWS);
+        lines.extend(visible_lines_around_index(
+            model_lines,
+            Some(browser.cursor),
+            list_rows,
+        ));
+    }
+
+    lines.push(String::new());
+    lines.push(MODEL_BROWSER_HELP.into());
+    lines.join("\n")
 }
 
 struct SelectionLines {
@@ -214,7 +260,7 @@ fn selection_lines(state: &AppState) -> SelectionLines {
     }
 }
 
-fn visible_selection_lines(
+fn visible_lines_around_index(
     lines: Vec<String>,
     selected_line_index: Option<usize>,
     visible_rows: usize,
@@ -468,24 +514,9 @@ fn render_modal(frame: &mut Frame, state: &AppState) {
             lines.push("Space toggle, Up/Down move, Enter import selected, Esc cancel".into());
             render_modal_text(frame, area, "Import Candidates", lines.join("\n"));
         }
-        ModalState::ModelBrowser(browser) => {
-            let filtered = state.model_browser_filtered_models();
-            let mut lines = vec![format!("Search: [ {} ]", browser.query), String::new()];
-            if filtered.is_empty() {
-                if browser.query.is_empty() {
-                    lines.push("No cached models available.".into());
-                } else {
-                    lines.push(format!("No models match \"{}\".", browser.query));
-                }
-            } else {
-                for (index, model) in filtered.iter().enumerate() {
-                    let cursor_mark = if index == browser.cursor { ">" } else { " " };
-                    lines.push(format!("{cursor_mark} {model}"));
-                }
-            }
-            lines.push(String::new());
-            lines.push("Type to filter, Up/Down move, Enter select, Esc cancel".into());
-            render_modal_text(frame, area, "Browse Models", lines.join("\n"));
+        ModalState::ModelBrowser(_) => {
+            let text = model_browser_text_for_height(state, area.height.saturating_sub(2) as usize);
+            render_modal_text(frame, area, "Browse Models", text);
         }
         ModalState::Shortcuts => {
             render_modal_text(frame, area, "Shortcuts", shortcuts_text());
@@ -658,10 +689,11 @@ mod tests {
     };
 
     use super::{
-        modal_form_field_lines, providers_text, selection_text, selection_text_for_height,
-        shortcuts_text, status_footer_hint, targets_text, ModalField,
+        modal_form_field_lines, model_browser_text, model_browser_text_for_height, providers_text,
+        selection_text, selection_text_for_height, shortcuts_text, status_footer_hint,
+        targets_text, ModalField,
     };
-    use crate::app::{AppState, FocusedPane};
+    use crate::app::{AppState, FocusedPane, ModalState, ModelBrowserState};
 
     #[test]
     fn provider_pane_is_single_line_without_model_count() {
@@ -712,6 +744,49 @@ mod tests {
         assert!(text.contains("manual-25"));
         assert!(!text.contains("manual-00"));
         assert!(text.contains("..."));
+    }
+
+    #[test]
+    fn model_browser_scrolls_to_keep_cursor_visible() {
+        let mut config = sample_config();
+        config.providers[0].models_cache = Some(ModelCache {
+            refreshed_at: "2026-06-28T00:00:00Z".into(),
+            models: (0..30).map(|index| format!("cached-{index:02}")).collect(),
+            last_error: None,
+        });
+        let mut state = AppState::from_config(PathBuf::from("config.toml"), config);
+        state.modal_state = ModalState::ModelBrowser(ModelBrowserState {
+            provider_id: "provider".into(),
+            query: String::new(),
+            cursor: 29,
+        });
+
+        let text = model_browser_text_for_height(&state, 12);
+
+        assert!(text.contains("> cached-29"));
+        assert!(!text.contains("cached-00"));
+        assert!(text.contains("..."));
+    }
+
+    #[test]
+    fn model_browser_renders_all_models_when_height_is_unbounded() {
+        let mut config = sample_config();
+        config.providers[0].models_cache = Some(ModelCache {
+            refreshed_at: "2026-06-28T00:00:00Z".into(),
+            models: vec!["alpha".into(), "beta".into()],
+            last_error: None,
+        });
+        let mut state = AppState::from_config(PathBuf::from("config.toml"), config);
+        state.modal_state = ModalState::ModelBrowser(ModelBrowserState {
+            provider_id: "provider".into(),
+            query: String::new(),
+            cursor: 1,
+        });
+
+        let text = model_browser_text(&state);
+
+        assert!(text.contains("  alpha"));
+        assert!(text.contains("> beta"));
     }
 
     #[test]

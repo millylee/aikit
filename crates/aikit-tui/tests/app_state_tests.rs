@@ -1236,6 +1236,29 @@ fn slash_opens_model_browser_when_cache_exists() {
 }
 
 #[test]
+fn model_browser_opens_on_active_model() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::Selection;
+
+    state.open_model_browser_modal().unwrap();
+
+    let ModalState::ModelBrowser(browser) = &state.modal_state else {
+        panic!("expected model browser modal");
+    };
+    assert_eq!(browser.cursor, 0);
+    assert_eq!(
+        state
+            .model_browser_filtered_models()
+            .get(browser.cursor)
+            .map(String::as_str),
+        Some("model-active")
+    );
+}
+
+#[test]
 fn model_browser_empty_cache_shows_hint() {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.providers[0].models_cache = None;

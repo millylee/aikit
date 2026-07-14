@@ -320,10 +320,20 @@ impl AppState {
             self.set_status("Refresh models with r first");
             return Ok(());
         }
+        let filtered = model_browser_filtered_models(provider, "");
+        let active_model = self.selected_model().or_else(|| {
+            self.config
+                .active_selection
+                .as_ref()
+                .map(|selection| selection.model_id.as_str())
+        });
+        let cursor = active_model
+            .and_then(|model| filtered.iter().position(|candidate| candidate == model))
+            .unwrap_or(0);
         self.modal_state = ModalState::ModelBrowser(ModelBrowserState {
             provider_id: provider.id.clone(),
             query: String::new(),
-            cursor: 0,
+            cursor,
         });
         Ok(())
     }
