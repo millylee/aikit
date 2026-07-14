@@ -1188,7 +1188,15 @@ impl AppState {
                 return false;
             }
         }
-        true
+        !updater::update_check_cooldown_active(self.config.update_prompt.last_checked_at.as_deref())
+    }
+
+    pub fn record_update_check(&mut self) -> Result<()> {
+        let mut next_config = self.config.clone();
+        next_config.update_prompt.last_checked_at = Some(updater::update_check_timestamp_now());
+        self.persist_state_if_file_backed_config(&next_config)?;
+        self.config = next_config;
+        Ok(())
     }
 
     pub async fn stage_update_in_background(
@@ -1246,20 +1254,25 @@ impl AppState {
         client: &reqwest::Client,
         latest_release_url: &str,
     ) -> Result<()> {
-        let check = self.check_updates(client, latest_release_url).await?;
-        if !check.update_available {
-            self.set_status(check.message);
-            return Ok(());
+        let result = async {
+            let check = self.check_updates(client, latest_release_url).await?;
+            if !check.update_available {
+                self.set_status(check.message);
+                return Ok(());
+            }
+            if self.config.update_prompt.skipped_version.as_deref()
+                == Some(check.latest_version.as_str())
+            {
+                self.set_status(format!("Skipped update v{}", check.latest_version));
+                return Ok(());
+            }
+            self.set_status("Downloading update...");
+            self.stage_update_in_background(client, latest_release_url)
+                .await
         }
-        if self.config.update_prompt.skipped_version.as_deref()
-            == Some(check.latest_version.as_str())
-        {
-            self.set_status(format!("Skipped update v{}", check.latest_version));
-            return Ok(());
-        }
-        self.set_status("Downloading update...");
-        self.stage_update_in_background(client, latest_release_url)
-            .await
+        .await;
+        self.record_update_check()?;
+        result
     }
 
     pub fn apply_active_selection(&mut self) -> Result<AppCommandOutcome> {

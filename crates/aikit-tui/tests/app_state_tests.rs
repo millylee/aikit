@@ -92,6 +92,49 @@ fn should_stage_background_update_false_when_pending_ready() {
 }
 
 #[test]
+fn should_stage_background_update_false_within_cooldown() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let mut config = AikitConfig::default();
+    config.update_prompt.last_checked_at = Some(aikit_core::updater::update_check_timestamp_now());
+    config.save_with_sidecars(&config_path).unwrap();
+
+    let mut state = AppState::new(config_path);
+    state.load_config().unwrap();
+
+    assert!(!state.should_stage_background_update());
+}
+
+#[test]
+fn should_stage_background_update_true_after_cooldown() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let mut config = AikitConfig::default();
+    config.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+    config.save_with_sidecars(&config_path).unwrap();
+
+    let mut state = AppState::new(config_path);
+    state.load_config().unwrap();
+
+    assert!(state.should_stage_background_update());
+}
+
+#[test]
+fn record_update_check_persists_timestamp() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("aikit").join("config.toml");
+    let config = AikitConfig::default();
+    config.save_with_sidecars(&config_path).unwrap();
+
+    let mut state = AppState::new(config_path.clone());
+    state.load_config().unwrap();
+    state.record_update_check().unwrap();
+
+    let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert!(loaded.update_prompt.last_checked_at.is_some());
+}
+
+#[test]
 fn format_refresh_error_keeps_short_provider_messages() {
     let err = AikitError::Provider("authentication or permission problem".into());
     let message = format_refresh_error(&err);

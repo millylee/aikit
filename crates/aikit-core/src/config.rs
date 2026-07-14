@@ -66,6 +66,8 @@ pub struct UpdatePromptState {
     pub skipped_version: Option<String>,
     #[serde(default)]
     pub pending_version: Option<String>,
+    #[serde(default)]
+    pub last_checked_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

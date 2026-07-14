@@ -2,7 +2,8 @@ use std::io::Write;
 
 use aikit_core::updater::{
     binary_file_name, check_for_updates, download_and_stage, parse_sha256_file,
-    release_archive_name, version_is_newer,
+    release_archive_name, update_check_cooldown_active, update_check_timestamp_now,
+    version_is_newer,
 };
 use flate2::{write::GzEncoder, Compression};
 use sha2::{Digest, Sha256};
@@ -68,6 +69,22 @@ fn parse_sha256_file_reads_release_checksum_format() {
         parsed,
         "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
     );
+}
+
+#[test]
+fn update_check_cooldown_active_within_24_hours() {
+    let recent = update_check_timestamp_now();
+    assert!(update_check_cooldown_active(Some(recent.as_str())));
+}
+
+#[test]
+fn update_check_cooldown_inactive_after_24_hours() {
+    assert!(!update_check_cooldown_active(Some("2020-01-01T00:00:00Z")));
+}
+
+#[test]
+fn update_check_cooldown_inactive_when_never_checked() {
+    assert!(!update_check_cooldown_active(None));
 }
 
 #[tokio::test]

@@ -117,6 +117,9 @@ async fn run_app(
                 }
                 Err(err) => state.set_status(format!("Update check failed: {err}")),
             }
+            if let Err(err) = state.record_update_check() {
+                state.set_status(format!("Failed to record update check: {err}"));
+            }
         }
 
         terminal.draw(|frame| ui::render(frame, state))?;

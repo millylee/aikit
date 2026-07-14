@@ -9,9 +9,12 @@ use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tar::Archive;
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use zip::ZipArchive;
 
 use crate::{AikitError, Result};
+
+pub const UPDATE_CHECK_COOLDOWN: Duration = Duration::hours(24);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateCheckOutcome {
@@ -77,6 +80,20 @@ pub fn binary_file_name() -> &'static str {
 
 pub fn normalize_release_tag(tag: &str) -> String {
     tag.trim().trim_start_matches('v').to_string()
+}
+
+pub fn update_check_timestamp_now() -> String {
+    OffsetDateTime::now_utc().format(&Rfc3339).unwrap()
+}
+
+pub fn update_check_cooldown_active(last_checked_at: Option<&str>) -> bool {
+    let Some(raw) = last_checked_at else {
+        return false;
+    };
+    let Ok(parsed) = OffsetDateTime::parse(raw, &Rfc3339) else {
+        return false;
+    };
+    OffsetDateTime::now_utc() - parsed < UPDATE_CHECK_COOLDOWN
 }
 
 pub fn version_is_newer(candidate: &str, current: &str) -> bool {

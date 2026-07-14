@@ -33,6 +33,7 @@ fn saves_and_loads_config_as_toml() {
         update_prompt: UpdatePromptState {
             skipped_version: Some("9.9.9".into()),
             pending_version: None,
+            last_checked_at: None,
         },
         targets: vec![TargetConfig {
             id: "codex".into(),
@@ -81,6 +82,7 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         update_prompt: UpdatePromptState {
             skipped_version: Some("1.2.3".into()),
             pending_version: None,
+            last_checked_at: None,
         },
         targets: Vec::new(),
         backup_history: vec![],
