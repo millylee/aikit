@@ -2,9 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{AikitError, Result};
 
-const TARGETS: [(&str, &str, &str); 3] = [
+const TARGETS: [(&str, &str, &str); 2] = [
     ("claude", ".claude", "Claude Code"),
-    ("gemini", ".gemini", "Gemini CLI"),
     ("codex", ".codex", "Codex CLI"),
 ];
 

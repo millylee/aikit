@@ -117,11 +117,6 @@ impl Default for AikitConfig {
                     enabled: false,
                     config_path: None,
                 },
-                TargetConfig {
-                    id: "gemini".into(),
-                    enabled: false,
-                    config_path: None,
-                },
             ],
             backup_history: Vec::new(),
         }

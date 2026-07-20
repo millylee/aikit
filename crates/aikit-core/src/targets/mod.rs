@@ -2,7 +2,6 @@ pub mod backup;
 pub mod claude;
 pub mod codex;
 pub mod detect;
-pub mod gemini;
 
 use std::path::PathBuf;
 

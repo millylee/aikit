@@ -12,12 +12,12 @@ use aikit_core::{
     },
     import::{
         apply_import_candidates, candidate_fingerprint, scan_claude_config, scan_codex_config,
-        scan_env, scan_gemini_config, ImportCandidate, ImportPlan,
+        scan_env, ImportCandidate, ImportPlan,
     },
     provider::OpenAiCompatibleClient,
     targets::{
-        claude::ClaudeWriter, codex::CodexWriter, gemini::GeminiWriter, TargetSelection,
-        TargetWriteResult, TargetWriter,
+        claude::ClaudeWriter, codex::CodexWriter, TargetSelection, TargetWriteResult,
+        TargetWriter,
     },
     updater::{self, StageUpdateOutcome, UpdateCheckOutcome},
     AikitError, Result,
@@ -527,10 +527,6 @@ impl AppState {
         append_scan_plan(
             &mut plan,
             scan_with_default_path("claude", &ClaudeWriter, scan_claude_config),
-        );
-        append_scan_plan(
-            &mut plan,
-            scan_with_default_path("gemini", &GeminiWriter, scan_gemini_config),
         );
         append_scan_plan(
             &mut plan,
@@ -2159,14 +2155,6 @@ fn write_target(
                 .map(Ok)
                 .unwrap_or_else(|| ClaudeWriter.default_path())?;
             ClaudeWriter::write_to_path_with_backup_root(&path, selection, backup_root)
-        }
-        "gemini" => {
-            let path = target
-                .config_path
-                .clone()
-                .map(Ok)
-                .unwrap_or_else(|| GeminiWriter.default_path())?;
-            GeminiWriter::write_to_path_with_backup_root(&path, selection, backup_root)
         }
         "codex" => {
             let path = target

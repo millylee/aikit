@@ -63,7 +63,8 @@ fn env_scan_candidate_fingerprint_changes_when_secret_changes() {
 #[test]
 fn codex_scan_reads_aikit_provider_fields() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("config.toml");
+    let path = dir.path().join(".codex").join("config.toml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
         r#"
@@ -73,8 +74,12 @@ model_provider = "aikit"
 [model_providers.aikit]
 name = "aikit"
 base_url = "https://proxy.example/v1"
-api_key = "sk-codex"
 "#,
+    )
+    .unwrap();
+    std::fs::write(
+        path.parent().unwrap().join("auth.json"),
+        r#"{"OPENAI_API_KEY":"sk-codex"}"#,
     )
     .unwrap();
 
@@ -87,6 +92,7 @@ api_key = "sk-codex"
         candidate.base_url.as_deref(),
         Some("https://proxy.example/v1")
     );
+    assert_eq!(candidate.api_key_name.as_deref(), Some("OPENAI_API_KEY"));
     assert_eq!(candidate.api_key_value.as_deref(), Some("sk-codex"));
     assert_eq!(candidate.model.as_deref(), Some("model-from-codex"));
 }

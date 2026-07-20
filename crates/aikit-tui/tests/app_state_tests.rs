@@ -476,7 +476,7 @@ fn h_l_and_arrow_keys_move_focus_between_panes() {
 fn l_focuses_targets_and_j_k_move_target_selection() {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.targets.push(TargetConfig {
-        id: "gemini".into(),
+        id: "claude".into(),
         enabled: true,
         config_path: None,
     });
@@ -496,7 +496,7 @@ fn l_focuses_targets_and_j_k_move_target_selection() {
         &mut state,
         KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
     );
-    assert_eq!(state.selected_target().unwrap().id, "gemini");
+    assert_eq!(state.selected_target().unwrap().id, "claude");
 
     handle_key(
         &mut state,
@@ -623,14 +623,8 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("aikit").join("config.toml");
     let codex_path = dir.path().join(".codex").join("config.toml");
-    let gemini_path = dir.path().join("gemini").join("settings.json");
     std::fs::create_dir_all(codex_path.parent().unwrap()).unwrap();
-    let mut config = sample_config(codex_path.clone());
-    config.targets.push(TargetConfig {
-        id: "gemini".into(),
-        enabled: false,
-        config_path: Some(gemini_path.clone()),
-    });
+    let config = sample_config(codex_path.clone());
     config.save_with_sidecars(&config_path).unwrap();
 
     let outcome = apply_active_selection(&config_path).unwrap();
@@ -639,13 +633,17 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     assert_eq!(outcome.skipped, 0);
     assert_eq!(outcome.failed, 0);
     assert!(codex_path.exists());
-    assert!(!gemini_path.exists());
 
     let codex: toml::Value = toml::from_str(&std::fs::read_to_string(codex_path).unwrap()).unwrap();
     assert_eq!(
         codex.get("model").and_then(|value| value.as_str()),
         Some("model-active")
     );
+    let auth: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join(".codex").join("auth.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(auth["OPENAI_API_KEY"], "sk-active");
 }
 
 #[test]

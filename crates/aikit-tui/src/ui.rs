@@ -318,7 +318,6 @@ fn targets_text(state: &AppState) -> String {
 fn target_display_name(target_id: &str) -> &str {
     match target_id {
         "claude" => "Claude Code",
-        "gemini" => "Gemini CLI",
         "codex" => "Codex CLI",
         other => other,
     }
@@ -797,7 +796,6 @@ mod tests {
 
         assert!(text.contains("> [x] Claude Code"));
         assert!(text.contains("  [ ] Codex CLI"));
-        assert!(text.contains("  [ ] Gemini CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
     }
@@ -883,11 +881,6 @@ mod tests {
                 },
                 TargetConfig {
                     id: "codex".into(),
-                    enabled: false,
-                    config_path: None,
-                },
-                TargetConfig {
-                    id: "gemini".into(),
                     enabled: false,
                     config_path: None,
                 },

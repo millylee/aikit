@@ -188,6 +188,7 @@ pub fn scan_gemini_config(path: &Path) -> ImportPlan {
 }
 
 pub fn scan_codex_config(path: &Path) -> ImportPlan {
+    let mut warnings = Vec::new();
     let data = match read_file_if_exists(path) {
         Ok(Some(data)) => data,
         Ok(None) => return ImportPlan::default(),
@@ -229,13 +230,45 @@ pub fn scan_codex_config(path: &Path) -> ImportPlan {
         .and_then(|table| table.get("base_url"))
         .and_then(TomlValue::as_str)
         .map(ToOwned::to_owned);
-    let api_key_value = provider_table
+    let legacy_api_key_value = provider_table
         .and_then(|table| table.get("api_key"))
         .and_then(TomlValue::as_str)
         .map(ToOwned::to_owned);
+    let auth_path = path
+        .parent()
+        .map(|parent| parent.join("auth.json"))
+        .unwrap_or_else(|| "auth.json".into());
+    let auth_api_key_value = match read_file_if_exists(&auth_path) {
+        Ok(Some(data)) => match serde_json::from_str::<JsonValue>(&data) {
+            Ok(value) => value
+                .get("OPENAI_API_KEY")
+                .and_then(JsonValue::as_str)
+                .map(ToOwned::to_owned),
+            Err(err) => {
+                warnings.push(format!("failed to parse codex auth config: {err}"));
+                None
+            }
+        },
+        Ok(None) => None,
+        Err(err) => {
+            warnings.push(format!("failed to read codex auth config: {err}"));
+            None
+        }
+    };
+    let api_key_value = auth_api_key_value
+        .clone()
+        .or_else(|| legacy_api_key_value.clone());
+    let api_key_name = if auth_api_key_value.is_some() {
+        Some("OPENAI_API_KEY".to_string())
+    } else {
+        api_key_value.as_ref().map(|_| "codex-api-key".to_string())
+    };
 
     if base_url.is_none() && api_key_value.is_none() && model.is_none() {
-        return ImportPlan::default();
+        return ImportPlan {
+            candidates: Vec::new(),
+            warnings,
+        };
     }
 
     ImportPlan {
@@ -244,12 +277,12 @@ pub fn scan_codex_config(path: &Path) -> ImportPlan {
             provider_id: provider_id.clone(),
             provider_name: title_case_provider_name(&provider_id),
             base_url,
-            api_key_name: api_key_value.as_ref().map(|_| "codex-api-key".to_string()),
+            api_key_name,
             api_key_value,
             model,
             warnings: Vec::new(),
         }],
-        warnings: Vec::new(),
+        warnings,
     }
 }
 
