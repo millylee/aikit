@@ -16,8 +16,7 @@ use aikit_core::{
     },
     provider::OpenAiCompatibleClient,
     targets::{
-        claude::ClaudeWriter, codex::CodexWriter, TargetSelection, TargetWriteResult,
-        TargetWriter,
+        claude::ClaudeWriter, codex::CodexWriter, TargetSelection, TargetWriteResult, TargetWriter,
     },
     updater::{self, StageUpdateOutcome, UpdateCheckOutcome},
     AikitError, Result,

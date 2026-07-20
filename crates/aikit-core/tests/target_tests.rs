@@ -222,13 +222,11 @@ model = "keep-me"
         parsed.get("model").and_then(|v| v.as_str()),
         Some("model-new")
     );
-    assert!(
-        parsed
-            .get("model_providers")
-            .and_then(|v| v.get("aikit"))
-            .and_then(|v| v.get("api_key"))
-            .is_none()
-    );
+    assert!(parsed
+        .get("model_providers")
+        .and_then(|v| v.get("aikit"))
+        .and_then(|v| v.get("api_key"))
+        .is_none());
     let auth: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(dir.path().join("auth.json")).unwrap())
             .unwrap();

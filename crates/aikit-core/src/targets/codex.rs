@@ -60,9 +60,8 @@ impl CodexWriter {
         };
         let mut auth = if auth_path.exists() {
             let existing = fs::read_to_string(&auth_path)?;
-            serde_json::from_str::<serde_json::Value>(&existing).map_err(|err| {
-                AikitError::TargetWrite(format!("invalid codex auth json: {err}"))
-            })?
+            serde_json::from_str::<serde_json::Value>(&existing)
+                .map_err(|err| AikitError::TargetWrite(format!("invalid codex auth json: {err}")))?
         } else {
             serde_json::json!({})
         };
