@@ -248,7 +248,11 @@ pub fn scan_codex_config(path: &Path) -> ImportPlan {
 
     let fallback_env_key_value = if env_key_value.is_none() {
         env_table
-            .and_then(|table| table.get("AIKIT_API_KEY").or_else(|| table.get("OPENAI_API_KEY")))
+            .and_then(|table| {
+                table
+                    .get("AIKIT_API_KEY")
+                    .or_else(|| table.get("OPENAI_API_KEY"))
+            })
             .and_then(TomlValue::as_str)
             .map(ToOwned::to_owned)
     } else {
@@ -280,22 +284,23 @@ pub fn scan_codex_config(path: &Path) -> ImportPlan {
             None
         }
     };
-    let (api_key_value, api_key_name) = if let (Some(val), Some(name)) = (env_key_value, env_key_name) {
-        (Some(val), Some(name))
-    } else if let Some(val) = fallback_env_key_value {
-        let name = if env_table.and_then(|t| t.get("AIKIT_API_KEY")).is_some() {
-            "AIKIT_API_KEY".to_string()
+    let (api_key_value, api_key_name) =
+        if let (Some(val), Some(name)) = (env_key_value, env_key_name) {
+            (Some(val), Some(name))
+        } else if let Some(val) = fallback_env_key_value {
+            let name = if env_table.and_then(|t| t.get("AIKIT_API_KEY")).is_some() {
+                "AIKIT_API_KEY".to_string()
+            } else {
+                "OPENAI_API_KEY".to_string()
+            };
+            (Some(val), Some(name))
+        } else if let Some(val) = auth_api_key_value {
+            (Some(val), Some("OPENAI_API_KEY".to_string()))
+        } else if let Some(val) = legacy_api_key_value {
+            (Some(val), Some("codex-api-key".to_string()))
         } else {
-            "OPENAI_API_KEY".to_string()
+            (None, None)
         };
-        (Some(val), Some(name))
-    } else if let Some(val) = auth_api_key_value {
-        (Some(val), Some("OPENAI_API_KEY".to_string()))
-    } else if let Some(val) = legacy_api_key_value {
-        (Some(val), Some("codex-api-key".to_string()))
-    } else {
-        (None, None)
-    };
 
     if base_url.is_none() && api_key_value.is_none() && model.is_none() {
         return ImportPlan {

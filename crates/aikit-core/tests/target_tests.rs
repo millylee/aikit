@@ -30,7 +30,10 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     assert!(updated.contains("sk-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
     assert_eq!(
-        parsed.get("env").and_then(|v| v.get("AIKIT_API_KEY")).and_then(|v| v.as_str()),
+        parsed
+            .get("env")
+            .and_then(|v| v.get("AIKIT_API_KEY"))
+            .and_then(|v| v.as_str()),
         Some("sk-new")
     );
     assert_eq!(
@@ -68,7 +71,10 @@ fn codex_writer_creates_missing_config() {
     assert!(updated.contains("sk-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
     assert_eq!(
-        parsed.get("env").and_then(|v| v.get("AIKIT_API_KEY")).and_then(|v| v.as_str()),
+        parsed
+            .get("env")
+            .and_then(|v| v.get("AIKIT_API_KEY"))
+            .and_then(|v| v.as_str()),
         Some("sk-new")
     );
     assert_eq!(
@@ -174,10 +180,16 @@ fn codex_writer_serializes_special_characters_in_toml() {
         Some(selection.base_url.as_str())
     );
     assert!(provider.get("api_key").is_none());
-    assert_eq!(provider.get("env_key").and_then(|v| v.as_str()), Some("AIKIT_API_KEY"));
+    assert_eq!(
+        provider.get("env_key").and_then(|v| v.as_str()),
+        Some("AIKIT_API_KEY")
+    );
     assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
     assert_eq!(
-        parsed.get("env").and_then(|v| v.get("AIKIT_API_KEY")).and_then(|v| v.as_str()),
+        parsed
+            .get("env")
+            .and_then(|v| v.get("AIKIT_API_KEY"))
+            .and_then(|v| v.as_str()),
         Some(selection.api_key.as_str())
     );
     assert!(!dir.path().join("auth.json").exists());
@@ -247,7 +259,10 @@ model = "keep-me"
         .and_then(|v| v.get("api_key"))
         .is_none());
     assert_eq!(
-        parsed.get("env").and_then(|v| v.get("AIKIT_API_KEY")).and_then(|v| v.as_str()),
+        parsed
+            .get("env")
+            .and_then(|v| v.get("AIKIT_API_KEY"))
+            .and_then(|v| v.as_str()),
         Some("sk-new")
     );
     assert!(!dir.path().join("auth.json").exists());

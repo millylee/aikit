@@ -106,11 +106,7 @@ impl CodexWriter {
 
         let mut env = match root.remove("env") {
             Some(toml::Value::Table(table)) => table,
-            Some(_) => {
-                return Err(AikitError::TargetWrite(
-                    "codex env must be a table".into(),
-                ))
-            }
+            Some(_) => return Err(AikitError::TargetWrite("codex env must be a table".into())),
             None => toml::map::Map::new(),
         };
         env.insert(
