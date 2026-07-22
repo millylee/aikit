@@ -38,10 +38,6 @@ impl CodexWriter {
         let tool_dir = resolve_tool_config_dir("codex", path, dirs.home_dir())
             .ok_or_else(|| AikitError::TargetWrite("unknown codex config directory".into()))?;
         ensure_tool_present_for_new_config("codex", path, &tool_dir)?;
-        let auth_path = path
-            .parent()
-            .map(|parent| parent.join("auth.json"))
-            .unwrap_or_else(|| PathBuf::from("auth.json"));
 
         let mut root = if path.exists() {
             let existing = fs::read_to_string(path)?;
@@ -58,35 +54,12 @@ impl CodexWriter {
         } else {
             toml::map::Map::new()
         };
-        let mut auth = if auth_path.exists() {
-            let existing = fs::read_to_string(&auth_path)?;
-            serde_json::from_str::<serde_json::Value>(&existing)
-                .map_err(|err| AikitError::TargetWrite(format!("invalid codex auth json: {err}")))?
-        } else {
-            serde_json::json!({})
-        };
-        if !auth.is_object() {
-            return Err(AikitError::TargetWrite(
-                "codex auth json root must be an object".into(),
-            ));
-        }
 
         let config_backup_path = match backup_root {
             Some(root) => backup_file_to_root("codex", path, root)?,
             None => backup_file("codex", path)?,
         };
-        let auth_backup_path = if auth_path.exists() {
-            match backup_root {
-                Some(root) => backup_file_to_root("codex", &auth_path, root)?,
-                None => backup_file("codex", &auth_path)?,
-            }
-        } else {
-            None
-        };
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        if let Some(parent) = auth_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
@@ -121,26 +94,40 @@ impl CodexWriter {
             toml::Value::String(selection.base_url.clone()),
         );
         provider.remove("api_key");
+        provider.insert(
+            "env_key".into(),
+            toml::Value::String("AIKIT_API_KEY".into()),
+        );
         model_providers.insert("aikit".into(), toml::Value::Table(provider));
         root.insert(
             "model_providers".into(),
             toml::Value::Table(model_providers),
         );
-        auth["OPENAI_API_KEY"] = serde_json::Value::String(selection.api_key.clone());
+
+        let mut env = match root.remove("env") {
+            Some(toml::Value::Table(table)) => table,
+            Some(_) => {
+                return Err(AikitError::TargetWrite(
+                    "codex env must be a table".into(),
+                ))
+            }
+            None => toml::map::Map::new(),
+        };
+        env.insert(
+            "AIKIT_API_KEY".into(),
+            toml::Value::String(selection.api_key.clone()),
+        );
+        root.insert("env".into(), toml::Value::Table(env));
 
         let content = toml::to_string(&toml::Value::Table(root)).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize codex config: {err}"))
         })?;
         fs::write(path, content)?;
-        let auth_content = serde_json::to_string_pretty(&auth).map_err(|err| {
-            AikitError::TargetWrite(format!("failed to serialize codex auth config: {err}"))
-        })?;
-        fs::write(&auth_path, auth_content)?;
 
         Ok(TargetWriteResult {
             target_id: "codex".into(),
             config_path: path.to_path_buf(),
-            backup_path: config_backup_path.or(auth_backup_path),
+            backup_path: config_backup_path,
         })
     }
 }

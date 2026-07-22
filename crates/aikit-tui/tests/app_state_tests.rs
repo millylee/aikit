@@ -639,11 +639,22 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
         codex.get("model").and_then(|value| value.as_str()),
         Some("model-active")
     );
-    let auth: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.path().join(".codex").join("auth.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(auth["OPENAI_API_KEY"], "sk-active");
+    assert_eq!(
+        codex
+            .get("env")
+            .and_then(|value| value.get("AIKIT_API_KEY"))
+            .and_then(|value| value.as_str()),
+        Some("sk-active")
+    );
+    assert_eq!(
+        codex
+            .get("model_providers")
+            .and_then(|value| value.get("aikit"))
+            .and_then(|value| value.get("env_key"))
+            .and_then(|value| value.as_str()),
+        Some("AIKIT_API_KEY")
+    );
+    assert!(!dir.path().join(".codex").join("auth.json").exists());
 }
 
 #[test]

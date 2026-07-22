@@ -98,6 +98,42 @@ base_url = "https://proxy.example/v1"
 }
 
 #[test]
+fn codex_scan_reads_env_table_and_env_key() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join(".codex").join("config.toml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"
+model = "model-from-codex"
+model_provider = "aikit"
+
+[env]
+AIKIT_API_KEY = "sk-env-key"
+
+[model_providers.aikit]
+name = "aikit"
+base_url = "https://proxy.example/v1"
+env_key = "AIKIT_API_KEY"
+"#,
+    )
+    .unwrap();
+
+    let plan = scan_codex_config(&path);
+
+    assert!(plan.warnings.is_empty());
+    let candidate = &plan.candidates[0];
+    assert_eq!(candidate.source, ImportSource::Codex);
+    assert_eq!(
+        candidate.base_url.as_deref(),
+        Some("https://proxy.example/v1")
+    );
+    assert_eq!(candidate.api_key_name.as_deref(), Some("AIKIT_API_KEY"));
+    assert_eq!(candidate.api_key_value.as_deref(), Some("sk-env-key"));
+    assert_eq!(candidate.model.as_deref(), Some("model-from-codex"));
+}
+
+#[test]
 fn claude_scan_reads_top_level_model() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");
