@@ -126,28 +126,22 @@ impl CodexWriter {
 fn set_aikit_api_key_env(api_key: &str, persist_user_scope: bool, _home_dir: &Path) {
     std::env::set_var("AIKIT_API_KEY", api_key);
 
-    if !persist_user_scope {
-        return;
-    }
-
-    #[cfg(all(windows, not(test)))]
-    {
-        let Ok(status) = Command::new("setx")
-            .arg("AIKIT_API_KEY")
-            .arg(api_key)
-            .status()
-        else {
-            return;
-        };
-
-        if !status.success() {
-            return;
+    if persist_user_scope {
+        #[cfg(all(windows, not(test)))]
+        {
+            let Ok(_status) = Command::new("setx")
+                .arg("AIKIT_API_KEY")
+                .arg(api_key)
+                .status()
+            else {
+                return;
+            };
         }
-    }
 
-    #[cfg(all(unix, not(test)))]
-    {
-        persist_unix_aikit_api_key(api_key, _home_dir);
+        #[cfg(all(unix, not(test)))]
+        {
+            persist_unix_aikit_api_key(api_key, _home_dir);
+        }
     }
 }
 
@@ -237,3 +231,6 @@ impl TargetWriter for CodexWriter {
         Self::write_to_path(&self.default_path()?, selection)
     }
 }
+
+
+
