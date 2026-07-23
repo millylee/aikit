@@ -641,13 +641,6 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     );
     assert_eq!(
         codex
-            .get("env")
-            .and_then(|value| value.get("AIKIT_API_KEY"))
-            .and_then(|value| value.as_str()),
-        Some("sk-active")
-    );
-    assert_eq!(
-        codex
             .get("model_providers")
             .and_then(|value| value.get("aikit"))
             .and_then(|value| value.get("env_key"))

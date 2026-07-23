@@ -3,6 +3,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(all(windows, not(test)))]
+use std::process::Command;
+
 use directories::BaseDirs;
 
 use crate::{AikitError, Result};
@@ -104,16 +107,8 @@ impl CodexWriter {
             toml::Value::Table(model_providers),
         );
 
-        let mut env = match root.remove("env") {
-            Some(toml::Value::Table(table)) => table,
-            Some(_) => return Err(AikitError::TargetWrite("codex env must be a table".into())),
-            None => toml::map::Map::new(),
-        };
-        env.insert(
-            "AIKIT_API_KEY".into(),
-            toml::Value::String(selection.api_key.clone()),
-        );
-        root.insert("env".into(), toml::Value::Table(env));
+        let should_persist_env = path == dirs.home_dir().join(".codex").join("config.toml");
+        set_aikit_api_key_env(&selection.api_key, should_persist_env, dirs.home_dir());
 
         let content = toml::to_string(&toml::Value::Table(root)).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize codex config: {err}"))
@@ -125,6 +120,105 @@ impl CodexWriter {
             config_path: path.to_path_buf(),
             backup_path: config_backup_path,
         })
+    }
+}
+
+fn set_aikit_api_key_env(api_key: &str, persist_user_scope: bool, _home_dir: &Path) {
+    std::env::set_var("AIKIT_API_KEY", api_key);
+
+    if !persist_user_scope {
+        return;
+    }
+
+    #[cfg(all(windows, not(test)))]
+    {
+        let Ok(status) = Command::new("setx")
+            .arg("AIKIT_API_KEY")
+            .arg(api_key)
+            .status()
+        else {
+            return;
+        };
+
+        if !status.success() {
+            return;
+        }
+    }
+
+    #[cfg(all(unix, not(test)))]
+    {
+        persist_unix_aikit_api_key(api_key, _home_dir);
+    }
+}
+
+#[cfg(all(unix, not(test)))]
+fn persist_unix_aikit_api_key(api_key: &str, home_dir: &Path) {
+    let rc_path = preferred_unix_shell_rc(home_dir);
+    let existing = fs::read_to_string(&rc_path).unwrap_or_default();
+
+    let begin = "# >>> aikit AIKIT_API_KEY >>>";
+    let end = "# <<< aikit AIKIT_API_KEY <<<";
+    let escaped = api_key.replace('\'', "'\\''");
+    let block = format!(
+        "{begin}\nexport AIKIT_API_KEY='{escaped}'\n{end}\n",
+        begin = begin,
+        escaped = escaped,
+        end = end
+    );
+
+    let updated = if let (Some(start), Some(finish)) = (existing.find(begin), existing.find(end)) {
+        if finish >= start {
+            let end_index = finish + end.len();
+            let mut value = String::new();
+            value.push_str(&existing[..start]);
+            if !value.ends_with('\n') && !value.is_empty() {
+                value.push('\n');
+            }
+            value.push_str(&block);
+            let suffix = existing[end_index..].trim_start_matches('\n');
+            if !suffix.is_empty() {
+                value.push_str(suffix);
+                if !value.ends_with('\n') {
+                    value.push('\n');
+                }
+            }
+            value
+        } else {
+            append_block(&existing, &block)
+        }
+    } else {
+        append_block(&existing, &block)
+    };
+
+    let _ = fs::write(rc_path, updated);
+}
+
+#[cfg(all(unix, not(test)))]
+fn append_block(existing: &str, block: &str) -> String {
+    if existing.is_empty() {
+        return block.to_string();
+    }
+
+    let mut value = existing.to_string();
+    if !value.ends_with('\n') {
+        value.push('\n');
+    }
+    value.push_str(block);
+    value
+}
+
+#[cfg(all(unix, not(test)))]
+fn preferred_unix_shell_rc(home_dir: &Path) -> PathBuf {
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let shell_name = Path::new(&shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+
+    match shell_name {
+        "zsh" => home_dir.join(".zshrc"),
+        "bash" => home_dir.join(".bashrc"),
+        _ => home_dir.join(".profile"),
     }
 }
 

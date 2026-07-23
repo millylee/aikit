@@ -27,15 +27,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
     assert!(updated.contains("https://example.com/v1"));
-    assert!(updated.contains("sk-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
-    assert_eq!(
-        parsed
-            .get("env")
-            .and_then(|v| v.get("AIKIT_API_KEY"))
-            .and_then(|v| v.as_str()),
-        Some("sk-new")
-    );
     assert_eq!(
         parsed
             .get("model_providers")
@@ -68,15 +60,7 @@ fn codex_writer_creates_missing_config() {
     assert!(path.exists());
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
-    assert!(updated.contains("sk-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
-    assert_eq!(
-        parsed
-            .get("env")
-            .and_then(|v| v.get("AIKIT_API_KEY"))
-            .and_then(|v| v.as_str()),
-        Some("sk-new")
-    );
     assert_eq!(
         parsed
             .get("model_providers")
@@ -185,13 +169,6 @@ fn codex_writer_serializes_special_characters_in_toml() {
         Some("AIKIT_API_KEY")
     );
     assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
-    assert_eq!(
-        parsed
-            .get("env")
-            .and_then(|v| v.get("AIKIT_API_KEY"))
-            .and_then(|v| v.as_str()),
-        Some(selection.api_key.as_str())
-    );
     assert!(!dir.path().join("auth.json").exists());
 }
 
@@ -258,13 +235,6 @@ model = "keep-me"
         .and_then(|v| v.get("aikit"))
         .and_then(|v| v.get("api_key"))
         .is_none());
-    assert_eq!(
-        parsed
-            .get("env")
-            .and_then(|v| v.get("AIKIT_API_KEY"))
-            .and_then(|v| v.as_str()),
-        Some("sk-new")
-    );
     assert!(!dir.path().join("auth.json").exists());
 }
 
