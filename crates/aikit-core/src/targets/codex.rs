@@ -231,6 +231,3 @@ impl TargetWriter for CodexWriter {
         Self::write_to_path(&self.default_path()?, selection)
     }
 }
-
-
-
