@@ -105,7 +105,8 @@ impl CodexWriter {
             let auth_path = parent.join("auth.json");
             let mut auth_val = if auth_path.exists() {
                 let existing = fs::read_to_string(&auth_path)?;
-                serde_json::from_str::<serde_json::Value>(&existing).unwrap_or_else(|_| serde_json::json!({}))
+                serde_json::from_str::<serde_json::Value>(&existing)
+                    .unwrap_or_else(|_| serde_json::json!({}))
             } else {
                 serde_json::json!({})
             };
@@ -152,4 +153,3 @@ impl TargetWriter for CodexWriter {
         Self::write_to_path(&self.default_path()?, selection)
     }
 }
-

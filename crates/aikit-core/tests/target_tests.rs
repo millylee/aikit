@@ -28,9 +28,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     assert!(updated.contains("model-new"));
     assert!(updated.contains("https://example.com/v1"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
-    let provider = parsed
-        .get("model_providers")
-        .and_then(|v| v.get("aikit"));
+    let provider = parsed.get("model_providers").and_then(|v| v.get("aikit"));
     assert!(provider.and_then(|v| v.get("env_key")).is_none());
 
     let auth_path = dir.path().join("auth.json");
@@ -65,9 +63,7 @@ fn codex_writer_creates_missing_config() {
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
-    let provider = parsed
-        .get("model_providers")
-        .and_then(|v| v.get("aikit"));
+    let provider = parsed.get("model_providers").and_then(|v| v.get("aikit"));
     assert!(provider.and_then(|v| v.get("env_key")).is_none());
 
     let auth_path = tool_dir.join("auth.json");
