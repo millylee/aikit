@@ -749,7 +749,7 @@ impl CodexWriter {
             fs::create_dir_all(parent)?;
         }
         let content = format!(
-            "model = \"{}\"\nmodel_provider = \"aikit\"\n[model_providers.aikit]\nname = \"aikit\"\nbase_url = \"{}\"\nenv_key = \"AIKIT_API_KEY\"\n\n",
+            "model = \"{}\"\nmodel_provider = \"aikit\"\n[model_providers.aikit]\nname = \"aikit\"\nbase_url = \"{}\"\n\n",
             selection.model,
             selection.base_url,
         );

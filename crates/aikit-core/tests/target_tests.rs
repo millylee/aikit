@@ -28,15 +28,19 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     assert!(updated.contains("model-new"));
     assert!(updated.contains("https://example.com/v1"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
+    let provider = parsed
+        .get("model_providers")
+        .and_then(|v| v.get("aikit"));
+    assert!(provider.and_then(|v| v.get("env_key")).is_none());
+
+    let auth_path = dir.path().join("auth.json");
+    assert!(auth_path.exists());
+    let auth_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
     assert_eq!(
-        parsed
-            .get("model_providers")
-            .and_then(|v| v.get("aikit"))
-            .and_then(|v| v.get("env_key"))
-            .and_then(|v| v.as_str()),
-        Some("AIKIT_API_KEY")
+        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
+        Some("sk-new")
     );
-    assert!(!dir.path().join("auth.json").exists());
 }
 
 #[test]
@@ -61,15 +65,19 @@ fn codex_writer_creates_missing_config() {
     let updated = std::fs::read_to_string(path).unwrap();
     assert!(updated.contains("model-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
+    let provider = parsed
+        .get("model_providers")
+        .and_then(|v| v.get("aikit"));
+    assert!(provider.and_then(|v| v.get("env_key")).is_none());
+
+    let auth_path = tool_dir.join("auth.json");
+    assert!(auth_path.exists());
+    let auth_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
     assert_eq!(
-        parsed
-            .get("model_providers")
-            .and_then(|v| v.get("aikit"))
-            .and_then(|v| v.get("env_key"))
-            .and_then(|v| v.as_str()),
-        Some("AIKIT_API_KEY")
+        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
+        Some("sk-new")
     );
-    assert!(!tool_dir.join("auth.json").exists());
 }
 
 #[test]
@@ -164,12 +172,17 @@ fn codex_writer_serializes_special_characters_in_toml() {
         Some(selection.base_url.as_str())
     );
     assert!(provider.get("api_key").is_none());
-    assert_eq!(
-        provider.get("env_key").and_then(|v| v.as_str()),
-        Some("AIKIT_API_KEY")
-    );
+    assert!(provider.get("env_key").is_none());
     assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
-    assert!(!dir.path().join("auth.json").exists());
+
+    let auth_path = dir.path().join("auth.json");
+    assert!(auth_path.exists());
+    let auth_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
+    assert_eq!(
+        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
+        Some(selection.api_key.as_str())
+    );
 }
 
 #[test]
@@ -230,12 +243,14 @@ model = "keep-me"
         parsed.get("model").and_then(|v| v.as_str()),
         Some("model-new")
     );
-    assert!(parsed
-        .get("model_providers")
-        .and_then(|v| v.get("aikit"))
-        .and_then(|v| v.get("api_key"))
-        .is_none());
-    assert!(!dir.path().join("auth.json").exists());
+    let auth_path = dir.path().join("auth.json");
+    assert!(auth_path.exists());
+    let auth_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
+    assert_eq!(
+        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
+        Some("sk-new")
+    );
 }
 
 #[test]
