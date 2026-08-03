@@ -41,6 +41,8 @@ fn saves_and_loads_config_as_toml() {
             config_path: None,
         }],
         backup_history: vec![],
+        claude_pin_models: true,
+        claude_1m_context: true,
     };
 
     config.save_with_sidecars(&path).unwrap();
@@ -86,6 +88,8 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         },
         targets: Vec::new(),
         backup_history: vec![],
+        claude_pin_models: true,
+        claude_1m_context: true,
     };
 
     config.save_with_sidecars(&path).unwrap();

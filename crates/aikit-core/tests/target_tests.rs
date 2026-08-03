@@ -15,6 +15,8 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
         &backup_root,
     )
@@ -54,6 +56,8 @@ fn codex_writer_creates_missing_config() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     )
     .unwrap();
@@ -87,6 +91,8 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
@@ -106,6 +112,8 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     )
     .unwrap();
@@ -126,6 +134,8 @@ fn codex_writer_refuses_invalid_existing_toml() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
@@ -143,6 +153,8 @@ fn codex_writer_serializes_special_characters_in_toml() {
         base_url: "https://example.com/v1?ref=\"test\"".into(),
         api_key: "sk\\key\"quoted".into(),
         model: "model\\with\"quotes".into(),
+        claude_pin_models: false,
+        claude_1m_context: false,
     };
 
     CodexWriter::write_to_path(&path, &selection).unwrap();
@@ -207,6 +219,8 @@ model = "keep-me"
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
         &dir.path().join("aikit"),
     )
@@ -265,6 +279,8 @@ model_providers = "not-a-table"
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
@@ -290,6 +306,8 @@ aikit = "not-a-table"
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
@@ -310,6 +328,8 @@ fn claude_writer_creates_minimal_json_config() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     )
     .unwrap();
@@ -333,6 +353,8 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
@@ -357,6 +379,8 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
         &backup_root,
     )
@@ -386,9 +410,163 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             base_url: "https://example.com/v1".into(),
             api_key: "sk-new".into(),
             model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
         },
     );
 
     assert!(matches!(result, Err(AikitError::TargetWrite(_))));
     assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
+fn claude_writer_pins_all_model_env_vars_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
+
+    let backup_root = dir.path().join("aikit");
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "glm-5.2".into(),
+            claude_pin_models: true,
+            claude_1m_context: false,
+        },
+        &backup_root,
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["model"], "glm-5.2");
+    assert_eq!(value["env"]["KEEP"], "yes");
+    assert_eq!(value["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-new");
+    assert_eq!(value["env"]["ANTHROPIC_BASE_URL"], "https://example.com/v1");
+    for var in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    ] {
+        assert_eq!(value["env"][var], "glm-5.2", "expected {var} to be pinned");
+    }
+    assert!(value["env"]
+        .get("CLAUDE_CODE_AUTO_COMPACT_WINDOW")
+        .is_none());
+}
+
+#[test]
+fn claude_writer_applies_1m_suffix_and_compact_window() {
+    let dir = tempdir().unwrap();
+    let tool_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    let path = tool_dir.join("settings.json");
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "glm-5.2".into(),
+            claude_pin_models: true,
+            claude_1m_context: true,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["model"], "glm-5.2[1m]");
+    assert_eq!(value["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "1000000");
+    for var in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    ] {
+        assert_eq!(
+            value["env"][var], "glm-5.2[1m]",
+            "expected {var} pinned with 1m suffix"
+        );
+    }
+}
+
+#[test]
+fn claude_writer_does_not_double_suffix_already_suffixed_model() {
+    let dir = tempdir().unwrap();
+    let tool_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    let path = tool_dir.join("settings.json");
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "glm-5.2[1m]".into(),
+            claude_pin_models: false,
+            claude_1m_context: true,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["model"], "glm-5.2[1m]");
+    assert_eq!(value["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "1000000");
+    assert!(value["env"].get("ANTHROPIC_MODEL").is_none());
+}
+
+#[test]
+fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"env":{
+            "ANTHROPIC_MODEL":"old",
+            "ANTHROPIC_SMALL_FAST_MODEL":"old",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL":"old",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL":"old",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL":"old",
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW":"999",
+            "KEEP":"yes"
+        }}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "glm-5.2".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["model"], "glm-5.2");
+    assert_eq!(value["env"]["KEEP"], "yes");
+    for var in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+    ] {
+        assert!(
+            value["env"].get(var).is_none(),
+            "expected {var} removed when disabled"
+        );
+    }
 }

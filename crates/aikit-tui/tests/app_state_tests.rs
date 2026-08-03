@@ -1389,6 +1389,8 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
             config_path: Some(codex_path),
         }],
         backup_history: Vec::new(),
+        claude_pin_models: true,
+        claude_1m_context: true,
     }
 }
 
@@ -1396,4 +1398,70 @@ fn sample_config_with_manual_model() -> AikitConfig {
     let mut config = sample_config(std::path::PathBuf::from("codex.toml"));
     config.providers[0].manual_models = vec!["manual-model".into()];
     config
+}
+
+#[test]
+fn active_target_selection_propagates_claude_options() {
+    let mut config = sample_config_with_manual_model();
+    let selection = active_target_selection(&config).unwrap();
+    assert!(selection.claude_pin_models);
+    assert!(selection.claude_1m_context);
+
+    config.claude_pin_models = false;
+    config.claude_1m_context = false;
+    let selection = active_target_selection(&config).unwrap();
+    assert!(!selection.claude_pin_models);
+    assert!(!selection.claude_1m_context);
+}
+
+#[test]
+fn space_toggles_claude_pin_models_option() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+    state.target_index = state.config.targets.len();
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+    );
+
+    assert!(!state.config.claude_pin_models);
+    assert!(state.status.contains("Pin all Claude models"));
+}
+
+#[test]
+fn space_toggles_claude_1m_context_option() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+    state.target_index = state.config.targets.len() + 1;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+    );
+
+    assert!(!state.config.claude_1m_context);
+    assert!(state.status.contains("Claude 1M context"));
+}
+
+#[test]
+fn apply_to_navigation_covers_option_rows() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+    );
+
+    assert_eq!(state.target_index, state.apply_row_count() - 1);
 }

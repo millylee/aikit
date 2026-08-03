@@ -11,6 +11,7 @@ It is built with [Ratatui](https://ratatui.rs/) and currently targets OpenAI-com
 - Select a global provider + API key + model combination.
 - Apply the active selection to Claude Code, Codex CLI, and Gemini CLI configs.
 - Back up existing target config files before writing.
+- For Claude Code: pin every model slot (main, small/fast, and the Haiku/Sonnet/Opus defaults) to the selected model, and optionally enable a 1M context window that appends a `[1m]` model-name suffix and sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW`. Both default on and can be toggled off in the Apply To pane.
 
 ## Install
 
@@ -89,7 +90,7 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 - `Left` / `h`: switch to the previous pane.
 - `Up` / `Down` or `k` / `j`: move selection in the focused pane.
 - `g` / `G`: jump to the first or last item in the focused pane.
-- `Enter` / `Space`: activate the selected provider, API key, model, or toggle the selected target.
+- `Enter` / `Space`: activate the selected provider, API key, model, toggle the selected target, or toggle a Claude Code option (Pin all models / 1M context).
 - `e`: edit the current provider in Providers, edit the current key/model in Selection, and show a hint in Apply To.
 - `r`: refresh models for the selected provider using the selected API key.
 - `m`: add a manual model for the selected provider.

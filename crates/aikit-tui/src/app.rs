@@ -1005,6 +1005,10 @@ impl AppState {
         self.config.targets.get(self.target_index)
     }
 
+    pub fn apply_row_count(&self) -> usize {
+        self.config.targets.len() + 2
+    }
+
     pub fn target_status(&self, target_id: &str) -> Option<&str> {
         self.target_statuses
             .iter()
@@ -1028,9 +1032,7 @@ impl AppState {
                 }
             }
             FocusedPane::ApplyTo => {
-                if !self.config.targets.is_empty() {
-                    self.target_index = (self.target_index + 1) % self.config.targets.len();
-                }
+                self.target_index = (self.target_index + 1) % self.apply_row_count();
             }
         }
     }
@@ -1052,10 +1054,8 @@ impl AppState {
                 }
             }
             FocusedPane::ApplyTo => {
-                if !self.config.targets.is_empty() {
-                    self.target_index = (self.target_index + self.config.targets.len() - 1)
-                        % self.config.targets.len();
-                }
+                let count = self.apply_row_count();
+                self.target_index = (self.target_index + count - 1) % count;
             }
         }
     }
@@ -1094,9 +1094,7 @@ impl AppState {
                 }
             }
             FocusedPane::ApplyTo => {
-                if !self.config.targets.is_empty() {
-                    self.target_index = self.config.targets.len() - 1;
-                }
+                self.target_index = self.apply_row_count() - 1;
             }
         }
     }
@@ -1105,7 +1103,16 @@ impl AppState {
         match self.focused_pane {
             FocusedPane::Providers => self.activate_current_selection(),
             FocusedPane::Selection => self.activate_selection_item(),
-            FocusedPane::ApplyTo => self.toggle_selected_target(),
+            FocusedPane::ApplyTo => {
+                let target_count = self.config.targets.len();
+                if self.target_index < target_count {
+                    self.toggle_selected_target();
+                } else if self.target_index == target_count {
+                    self.toggle_claude_pin_models();
+                } else {
+                    self.toggle_claude_1m_context();
+                }
+            }
         }
     }
 
@@ -1139,6 +1146,26 @@ impl AppState {
             let target_id = target.id.clone();
             self.set_target_status(target_id.clone(), format!("{target_id} {status}"));
         }
+    }
+
+    pub fn toggle_claude_pin_models(&mut self) {
+        self.config.claude_pin_models = !self.config.claude_pin_models;
+        let status = if self.config.claude_pin_models {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Pin all Claude models {status}"));
+    }
+
+    pub fn toggle_claude_1m_context(&mut self) {
+        self.config.claude_1m_context = !self.config.claude_1m_context;
+        let status = if self.config.claude_1m_context {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Claude 1M context {status}"));
     }
 
     pub async fn refresh_active_models(
@@ -1302,7 +1329,7 @@ impl AppState {
             .min(self.config.providers.len().saturating_sub(1));
         self.target_index = self
             .target_index
-            .min(self.config.targets.len().saturating_sub(1));
+            .min(self.apply_row_count().saturating_sub(1));
 
         if let Some(active) = &self.config.active_selection {
             if let Some(provider_index) = self
@@ -1868,6 +1895,8 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         base_url: provider.base_url.clone(),
         api_key: api_key.value.clone(),
         model: active.model_id.clone(),
+        claude_pin_models: config.claude_pin_models,
+        claude_1m_context: config.claude_1m_context,
     })
 }
 

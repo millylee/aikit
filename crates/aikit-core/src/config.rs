@@ -18,6 +18,10 @@ pub struct AikitConfig {
     #[serde(default, skip_serializing)]
     pub update_prompt: UpdatePromptState,
     pub targets: Vec<TargetConfig>,
+    #[serde(default = "default_true")]
+    pub claude_pin_models: bool,
+    #[serde(default = "default_true")]
+    pub claude_1m_context: bool,
     #[serde(default, skip_serializing)]
     pub backup_history: Vec<BackupRecord>,
 }
@@ -99,6 +103,10 @@ pub struct BackupRecord {
     pub status: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for AikitConfig {
     fn default() -> Self {
         Self {
@@ -118,6 +126,8 @@ impl Default for AikitConfig {
                     config_path: None,
                 },
             ],
+            claude_pin_models: true,
+            claude_1m_context: true,
             backup_history: Vec::new(),
         }
     }

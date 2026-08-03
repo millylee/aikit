@@ -12,6 +12,8 @@ pub struct TargetSelection {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    pub claude_pin_models: bool,
+    pub claude_1m_context: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -65,6 +65,12 @@ impl ClaudeWriter {
         let object = value.as_object_mut().ok_or_else(|| {
             AikitError::TargetWrite("claude json config root must be an object".into())
         })?;
+        let effective_model = if selection.claude_1m_context {
+            with_1m_suffix(&selection.model)
+        } else {
+            selection.model.clone()
+        };
+
         let env = object.entry("env").or_insert_with(|| serde_json::json!({}));
         let env_object = env
             .as_object_mut()
@@ -77,8 +83,24 @@ impl ClaudeWriter {
             "ANTHROPIC_BASE_URL".into(),
             Value::String(selection.base_url.clone()),
         );
-        env_object.remove("ANTHROPIC_MODEL");
-        object.insert("model".into(), Value::String(selection.model.clone()));
+        if selection.claude_pin_models {
+            for var in CLAUDE_PIN_MODEL_VARS {
+                env_object.insert(var.into(), Value::String(effective_model.clone()));
+            }
+        } else {
+            for var in CLAUDE_PIN_MODEL_VARS {
+                env_object.remove(var);
+            }
+        }
+        if selection.claude_1m_context {
+            env_object.insert(
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW".into(),
+                Value::String("1000000".to_string()),
+            );
+        } else {
+            env_object.remove("CLAUDE_CODE_AUTO_COMPACT_WINDOW");
+        }
+        object.insert("model".into(), Value::String(effective_model.clone()));
 
         let content = serde_json::to_string_pretty(&value).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize claude config: {err}"))
@@ -106,5 +128,21 @@ impl TargetWriter for ClaudeWriter {
 
     fn write(&self, selection: &TargetSelection) -> Result<TargetWriteResult> {
         Self::write_to_path(&self.default_path()?, selection)
+    }
+}
+
+const CLAUDE_PIN_MODEL_VARS: [&str; 5] = [
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_SMALL_FAST_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+];
+
+fn with_1m_suffix(model: &str) -> String {
+    if model.ends_with("[1m]") {
+        model.to_string()
+    } else {
+        format!("{model}[1m]")
     }
 }

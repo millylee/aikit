@@ -293,26 +293,47 @@ fn visible_lines_around_index(
 }
 
 fn targets_text(state: &AppState) -> String {
-    if state.config.targets.is_empty() {
-        return "No targets configured.".into();
+    let mut lines = Vec::new();
+
+    for (index, target) in state.config.targets.iter().enumerate() {
+        let cursor = if index == state.target_index {
+            ">"
+        } else {
+            " "
+        };
+        let enabled = if target.enabled { "[x]" } else { "[ ]" };
+        lines.push(format!(
+            "{cursor} {enabled} {}",
+            target_display_name(&target.id)
+        ));
     }
 
-    state
-        .config
-        .targets
-        .iter()
-        .enumerate()
-        .map(|(index, target)| {
-            let cursor = if index == state.target_index {
-                ">"
-            } else {
-                " "
-            };
-            let enabled = if target.enabled { "[x]" } else { "[ ]" };
-            format!("{cursor} {enabled} {}", target_display_name(&target.id))
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let target_count = state.config.targets.len();
+    let pin_cursor = if state.target_index == target_count {
+        ">"
+    } else {
+        " "
+    };
+    let pin_enabled = if state.config.claude_pin_models {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!("{pin_cursor} {pin_enabled} Pin all Claude models"));
+
+    let ctx_cursor = if state.target_index == target_count + 1 {
+        ">"
+    } else {
+        " "
+    };
+    let ctx_enabled = if state.config.claude_1m_context {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!("{ctx_cursor} {ctx_enabled} Claude 1M context"));
+
+    lines.join("\n")
 }
 
 fn target_display_name(target_id: &str) -> &str {
