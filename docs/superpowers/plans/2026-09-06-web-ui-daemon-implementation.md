@@ -78,6 +78,6 @@
 
 ### Phase 6 — tests, CI, release
 
-- [ ] API tests: auth rejection, masked responses, CRUD round-trips against temp config dirs, apply flow with backup assertions.
-- [ ] Lifecycle tests: daemon.json reclaim, stop idempotency.
-- [ ] `cargo fmt`/`clippy`/`test` green; release via `scripts/version.ps1` patch bump as usual.
+- [x] API tests: auth rejection, masked responses, CRUD round-trips against temp config dirs, apply flow with backup assertions.
+- [x] Lifecycle tests: daemon.json reclaim, stop idempotency.
+- [x] `cargo fmt`/`clippy`/`test` green; release via `scripts/version.ps1` patch bump as usual.
