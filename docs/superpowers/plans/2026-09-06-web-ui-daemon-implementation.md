@@ -58,8 +58,8 @@
 
 ### Phase 3 — read APIs
 
-- [ ] `GET /api/config`: full config with masked key values, targets, toggles, active selection.
-- [ ] `GET /api/providers`, `GET /api/providers/:id` (with masked keys + cached models).
+- [x] `GET /api/config`: full config with masked key values, targets, toggles, active selection.
+- [x] `GET /api/providers`, `GET /api/providers/:id` (with masked keys + cached models).
 
 ### Phase 4 — write APIs
 

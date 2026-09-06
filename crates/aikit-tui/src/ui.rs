@@ -4,6 +4,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
 use aikit_core::import::{ImportCandidate, ImportSource};
+use aikit_core::mask_secret;
 
 use crate::app::{ApiKeyFormMode, AppState, FocusedPane, ModalState, ProviderFormMode};
 
@@ -675,19 +676,6 @@ fn shortcuts_text() -> String {
         "  Esc: cancel",
     ]
     .join("\n")
-}
-
-fn mask_secret(value: &str) -> String {
-    if value.is_empty() {
-        return String::new();
-    }
-    let chars = value.chars().collect::<Vec<_>>();
-    if chars.len() < 9 {
-        return "***".into();
-    }
-    let prefix = chars.iter().take(4).collect::<String>();
-    let suffix = chars[chars.len() - 4..].iter().collect::<String>();
-    format!("{prefix}...{suffix}")
 }
 
 fn format_import_candidate(candidate: &ImportCandidate) -> String {

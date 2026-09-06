@@ -16,7 +16,8 @@ pub const DEFAULT_BIND: &str = "127.0.0.1";
 
 pub async fn serve(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<()> {
     let token = token::ensure_token(aikit_dir)?;
-    let app = router(&token);
+    let config_path = aikit_core::config::default_config_path()?;
+    let app = router(&token, config_path);
 
     let listener = tokio::net::TcpListener::bind((bind, port))
         .await
