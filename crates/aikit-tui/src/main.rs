@@ -114,8 +114,10 @@ async fn run_daemon(action: DaemonAction) -> Result<()> {
         DaemonAction::Status => {
             match aikit_daemon::lifecycle::status(&dir).await? {
                 aikit_daemon::lifecycle::StatusReport::Running { info } => println!(
-                    "运行中：pid {}，端口 {}（http://127.0.0.1:{}）",
-                    info.pid, info.port, info.port
+                    "运行中：pid {}，端口 {}（{}）",
+                    info.pid,
+                    info.port,
+                    aikit_daemon::lifecycle::format_http_url(info.bind, info.port)
                 ),
                 aikit_daemon::lifecycle::StatusReport::Stale { info } => println!(
                     "已停止（发现残留记录：pid {}，端口 {}）",
@@ -139,14 +141,37 @@ async fn run_daemon(action: DaemonAction) -> Result<()> {
             }
             Ok(())
         }
-        DaemonAction::Start { .. } => {
-            println!("daemon start 将在下一阶段提供；当前可前台运行：aikit daemon serve");
+        DaemonAction::Start { port, bind } => {
+            report_start(
+                aikit_daemon::lifecycle::start(&dir, bind, port).await?,
+                &dir,
+            );
             Ok(())
         }
-        DaemonAction::Restart { .. } => {
-            println!("daemon restart 将在下一阶段提供；当前可前台运行：aikit daemon serve");
+        DaemonAction::Restart { port, bind } => {
+            report_start(
+                aikit_daemon::lifecycle::restart(&dir, bind, port).await?,
+                &dir,
+            );
             Ok(())
         }
+    }
+}
+
+fn report_start(outcome: aikit_daemon::lifecycle::StartOutcome, dir: &std::path::Path) {
+    match outcome {
+        aikit_daemon::lifecycle::StartOutcome::Started { pid, url } => {
+            println!("后台服务已启动：pid {pid}（{url}）");
+            println!(
+                "访问令牌文件：{}",
+                aikit_daemon::token::token_path(dir).display()
+            );
+        }
+        aikit_daemon::lifecycle::StartOutcome::AlreadyRunning { info } => println!(
+            "后台服务已在运行：pid {}（{}）",
+            info.pid,
+            aikit_daemon::lifecycle::format_http_url(info.bind, info.port)
+        ),
     }
 }
 

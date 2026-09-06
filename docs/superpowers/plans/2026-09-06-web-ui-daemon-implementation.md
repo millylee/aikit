@@ -52,9 +52,9 @@
 
 ### Phase 2 — start / restart with detach and single instance
 
-- [ ] `start`: refuse when a live daemon answers probe; spawn `aikit daemon serve` detached (Windows `CREATE_DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, Unix setsid), poll health until ready, print URL + token file path.
-- [ ] Handle stale daemon.json (pid dead, port closed) by reclaiming.
-- [ ] `restart`: stop (tolerate not-running) then start.
+- [x] `start`: refuse when a live daemon answers probe; spawn `aikit daemon serve` detached (Windows `CREATE_DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, Unix setsid), poll health until ready, print URL + token file path.
+- [x] Handle stale daemon.json (pid dead, port closed) by reclaiming.
+- [x] `restart`: stop (tolerate not-running) then start.
 
 ### Phase 3 — read APIs
 

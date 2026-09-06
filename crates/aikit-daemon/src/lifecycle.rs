@@ -1,17 +1,28 @@
 use std::{
     fs,
+    net::IpAddr,
     path::{Path, PathBuf},
-    process::Command,
-    time::Duration,
+    process::{Child, Command, Stdio},
+    time::{Duration, Instant},
 };
 
 use aikit_core::{AikitError, Result};
 use serde::{Deserialize, Serialize};
 
+const START_READINESS_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DaemonInfo {
     pub pid: u32,
     pub port: u16,
+    pub bind: IpAddr,
+}
+
+pub fn format_http_url(bind: IpAddr, port: u16) -> String {
+    match bind {
+        IpAddr::V4(addr) => format!("http://{addr}:{port}"),
+        IpAddr::V6(addr) => format!("http://[{addr}]:{port}"),
+    }
 }
 
 pub fn daemon_info_path(aikit_dir: &Path) -> PathBuf {
@@ -39,7 +50,7 @@ pub fn remove_daemon_info(aikit_dir: &Path) {
     let _ = fs::remove_file(daemon_info_path(aikit_dir));
 }
 
-pub async fn probe_alive(port: u16) -> bool {
+pub async fn probe_alive(bind: IpAddr, port: u16) -> bool {
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
@@ -47,7 +58,7 @@ pub async fn probe_alive(port: u16) -> bool {
         Ok(client) => client,
         Err(_) => return false,
     };
-    let url = format!("http://127.0.0.1:{port}/api/health");
+    let url = format!("{}/api/health", format_http_url(bind, port));
     matches!(
         client.get(&url).send().await, Ok(response) if response.status().is_success()
     )
@@ -57,7 +68,7 @@ pub async fn status(aikit_dir: &Path) -> Result<StatusReport> {
     let Some(info) = read_daemon_info(aikit_dir) else {
         return Ok(StatusReport::Stopped);
     };
-    if probe_alive(info.port).await {
+    if probe_alive(info.bind, info.port).await {
         Ok(StatusReport::Running { info })
     } else {
         Ok(StatusReport::Stale { info })
@@ -68,13 +79,13 @@ pub async fn stop(aikit_dir: &Path) -> Result<StopOutcome> {
     let Some(info) = read_daemon_info(aikit_dir) else {
         return Ok(StopOutcome::NotRunning);
     };
-    if !probe_alive(info.port).await {
+    if !probe_alive(info.bind, info.port).await {
         remove_daemon_info(aikit_dir);
         return Ok(StopOutcome::StaleRemoved);
     }
     terminate_pid(info.pid)?;
     for _ in 0..20 {
-        if !probe_alive(info.port).await {
+        if !probe_alive(info.bind, info.port).await {
             remove_daemon_info(aikit_dir);
             return Ok(StopOutcome::Stopped { pid: info.pid });
         }
@@ -84,6 +95,97 @@ pub async fn stop(aikit_dir: &Path) -> Result<StopOutcome> {
         "daemon pid {} did not stop within timeout",
         info.pid
     )))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartOutcome {
+    Started { pid: u32, url: String },
+    AlreadyRunning { info: DaemonInfo },
+}
+
+pub async fn ensure_startable(aikit_dir: &Path) -> Result<Option<DaemonInfo>> {
+    if let Some(info) = read_daemon_info(aikit_dir) {
+        if probe_alive(info.bind, info.port).await {
+            return Ok(Some(info));
+        }
+        remove_daemon_info(aikit_dir);
+    }
+    Ok(None)
+}
+
+pub async fn start(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOutcome> {
+    if let Some(info) = ensure_startable(aikit_dir).await? {
+        return Ok(StartOutcome::AlreadyRunning { info });
+    }
+
+    let mut child = spawn_serve(bind, port)?;
+    let deadline = Instant::now() + START_READINESS_TIMEOUT;
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(AikitError::Provider(format!(
+                "daemon process exited before becoming ready (code {status}); 端口 {port} 可能被占用"
+            )));
+        }
+        if probe_alive(bind, port).await {
+            return Ok(StartOutcome::Started {
+                pid: child.id(),
+                url: format_http_url(bind, port),
+            });
+        }
+        if Instant::now() >= deadline {
+            return Err(AikitError::Provider(format!(
+                "daemon did not become ready on port {port} within timeout"
+            )));
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+pub async fn restart(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOutcome> {
+    stop(aikit_dir).await?;
+    start(aikit_dir, bind, port).await
+}
+
+fn spawn_serve(bind: IpAddr, port: u16) -> Result<Child> {
+    let exe = std::env::current_exe().map_err(AikitError::Io)?;
+    let mut command = Command::new(exe);
+    command
+        .args([
+            "daemon",
+            "serve",
+            "--port",
+            &port.to_string(),
+            "--bind",
+            &bind.to_string(),
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+
+    command
+        .spawn()
+        .map_err(|err| AikitError::Provider(format!("failed to spawn daemon: {err}")))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
