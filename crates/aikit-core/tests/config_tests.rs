@@ -43,8 +43,7 @@ fn saves_and_loads_config_as_toml() {
         backup_history: vec![],
         claude_pin_models: true,
         claude_1m_context: true,
-        claude_bypass_permissions: false,
-        codex_bypass_permissions: false,
+        bypass_permissions: false,
     };
 
     config.save_with_sidecars(&path).unwrap();
@@ -92,8 +91,7 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         backup_history: vec![],
         claude_pin_models: true,
         claude_1m_context: true,
-        claude_bypass_permissions: false,
-        codex_bypass_permissions: false,
+        bypass_permissions: false,
     };
 
     config.save_with_sidecars(&path).unwrap();

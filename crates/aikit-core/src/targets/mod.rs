@@ -14,8 +14,7 @@ pub struct TargetSelection {
     pub model: String,
     pub claude_pin_models: bool,
     pub claude_1m_context: bool,
-    pub claude_bypass_permissions: bool,
-    pub codex_bypass_permissions: bool,
+    pub bypass_permissions: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

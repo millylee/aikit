@@ -102,7 +102,7 @@ impl ClaudeWriter {
         }
         object.insert("model".into(), Value::String(effective_model.clone()));
 
-        if selection.claude_bypass_permissions {
+        if selection.bypass_permissions {
             let permissions = object
                 .entry("permissions")
                 .or_insert_with(|| serde_json::json!({}));

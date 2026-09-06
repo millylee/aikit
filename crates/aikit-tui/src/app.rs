@@ -1006,7 +1006,7 @@ impl AppState {
     }
 
     pub fn apply_row_count(&self) -> usize {
-        self.config.targets.len() + 4
+        self.config.targets.len() + 3
     }
 
     pub fn target_status(&self, target_id: &str) -> Option<&str> {
@@ -1111,10 +1111,8 @@ impl AppState {
                     self.toggle_claude_pin_models();
                 } else if self.target_index == target_count + 1 {
                     self.toggle_claude_1m_context();
-                } else if self.target_index == target_count + 2 {
-                    self.toggle_claude_bypass_permissions();
                 } else {
-                    self.toggle_codex_bypass_permissions();
+                    self.toggle_bypass_permissions();
                 }
             }
         }
@@ -1172,24 +1170,14 @@ impl AppState {
         self.set_status(format!("Claude 1M context {status}"));
     }
 
-    pub fn toggle_claude_bypass_permissions(&mut self) {
-        self.config.claude_bypass_permissions = !self.config.claude_bypass_permissions;
-        let status = if self.config.claude_bypass_permissions {
+    pub fn toggle_bypass_permissions(&mut self) {
+        self.config.bypass_permissions = !self.config.bypass_permissions;
+        let status = if self.config.bypass_permissions {
             "enabled"
         } else {
             "disabled"
         };
-        self.set_status(format!("Claude bypass permissions {status}"));
-    }
-
-    pub fn toggle_codex_bypass_permissions(&mut self) {
-        self.config.codex_bypass_permissions = !self.config.codex_bypass_permissions;
-        let status = if self.config.codex_bypass_permissions {
-            "enabled"
-        } else {
-            "disabled"
-        };
-        self.set_status(format!("Codex bypass permissions {status}"));
+        self.set_status(format!("Bypass permissions {status}"));
     }
 
     pub async fn refresh_active_models(
@@ -1921,8 +1909,7 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         model: active.model_id.clone(),
         claude_pin_models: config.claude_pin_models,
         claude_1m_context: config.claude_1m_context,
-        claude_bypass_permissions: config.claude_bypass_permissions,
-        codex_bypass_permissions: config.codex_bypass_permissions,
+        bypass_permissions: config.bypass_permissions,
     })
 }
 

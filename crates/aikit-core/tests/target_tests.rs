@@ -17,8 +17,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
         &backup_root,
     )
@@ -65,8 +64,7 @@ fn codex_writer_creates_missing_config() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -107,8 +105,7 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -130,8 +127,7 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -154,8 +150,7 @@ fn codex_writer_refuses_invalid_existing_toml() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -175,8 +170,7 @@ fn codex_writer_serializes_special_characters_in_toml() {
         model: "model\\with\"quotes".into(),
         claude_pin_models: false,
         claude_1m_context: false,
-        claude_bypass_permissions: false,
-        codex_bypass_permissions: false,
+        bypass_permissions: false,
     };
 
     CodexWriter::write_to_path(&path, &selection).unwrap();
@@ -246,8 +240,7 @@ model = "keep-me"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
         &dir.path().join("aikit"),
     )
@@ -308,8 +301,7 @@ model_providers = "not-a-table"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -337,8 +329,7 @@ aikit = "not-a-table"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -361,8 +352,7 @@ fn claude_writer_creates_minimal_json_config() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -388,8 +378,7 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -416,8 +405,7 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
         &backup_root,
     )
@@ -449,8 +437,7 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     );
 
@@ -473,8 +460,7 @@ fn claude_writer_pins_all_model_env_vars_when_enabled() {
             model: "glm-5.2".into(),
             claude_pin_models: true,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
         &backup_root,
     )
@@ -515,8 +501,7 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
             model: "glm-5.2".into(),
             claude_pin_models: true,
             claude_1m_context: true,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -554,8 +539,7 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
             model: "glm-5.2[1m]".into(),
             claude_pin_models: false,
             claude_1m_context: true,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -593,8 +577,7 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             model: "glm-5.2".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -636,8 +619,7 @@ fn claude_writer_sets_bypass_permissions_when_enabled() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: true,
-            codex_bypass_permissions: false,
+            bypass_permissions: true,
         },
     )
     .unwrap();
@@ -667,8 +649,7 @@ fn claude_writer_removes_bypass_permissions_when_disabled() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -693,8 +674,7 @@ fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -718,8 +698,7 @@ fn codex_writer_sets_bypass_permissions_when_enabled() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: true,
+            bypass_permissions: true,
         },
     )
     .unwrap();
@@ -753,8 +732,7 @@ fn codex_writer_removes_bypass_permissions_when_disabled() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();
@@ -778,8 +756,7 @@ fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
-            claude_bypass_permissions: false,
-            codex_bypass_permissions: false,
+            bypass_permissions: false,
         },
     )
     .unwrap();

@@ -69,7 +69,7 @@ impl CodexWriter {
         root.insert("model".into(), toml::Value::String(selection.model.clone()));
         root.insert("model_provider".into(), toml::Value::String("aikit".into()));
 
-        if selection.codex_bypass_permissions {
+        if selection.bypass_permissions {
             root.insert(
                 "approval_policy".into(),
                 toml::Value::String("never".into()),

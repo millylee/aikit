@@ -1396,8 +1396,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
         backup_history: Vec::new(),
         claude_pin_models: true,
         claude_1m_context: true,
-        claude_bypass_permissions: false,
-        codex_bypass_permissions: false,
+        bypass_permissions: false,
     }
 }
 
@@ -1458,7 +1457,7 @@ fn space_toggles_claude_1m_context_option() {
 }
 
 #[test]
-fn space_toggles_claude_bypass_permissions_option() {
+fn space_toggles_bypass_permissions_option() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
@@ -1471,26 +1470,8 @@ fn space_toggles_claude_bypass_permissions_option() {
         KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
     );
 
-    assert!(state.config.claude_bypass_permissions);
-    assert!(state.status.contains("Claude bypass permissions"));
-}
-
-#[test]
-fn space_toggles_codex_bypass_permissions_option() {
-    let mut state = AppState::from_config(
-        std::path::PathBuf::from("config.toml"),
-        sample_config(std::path::PathBuf::from("codex.toml")),
-    );
-    state.focused_pane = FocusedPane::ApplyTo;
-    state.target_index = state.config.targets.len() + 3;
-
-    handle_key(
-        &mut state,
-        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
-    );
-
-    assert!(state.config.codex_bypass_permissions);
-    assert!(state.status.contains("Codex bypass permissions"));
+    assert!(state.config.bypass_permissions);
+    assert!(state.status.contains("Bypass permissions"));
 }
 
 #[test]
