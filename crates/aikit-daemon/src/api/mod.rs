@@ -23,6 +23,8 @@ use axum::{
 };
 
 const INDEX_HTML: &str = include_str!("../../assets/index.html");
+const APP_JS: &str = include_str!("../../assets/app.js");
+const STYLE_CSS: &str = include_str!("../../assets/style.css");
 
 #[derive(Clone)]
 pub struct AppState {
@@ -69,6 +71,8 @@ pub fn router(token: &str, config_path: PathBuf) -> Router {
 
     Router::new()
         .route("/", get(index))
+        .route("/app.js", get(app_js))
+        .route("/style.css", get(style_css))
         .route("/api/health", get(health))
         .nest("/api", protected)
         .with_state(state)
@@ -205,6 +209,23 @@ impl ApiKeyResponse {
 
 async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+async fn app_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        APP_JS,
+    )
+}
+
+async fn style_css() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        STYLE_CSS,
+    )
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

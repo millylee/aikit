@@ -80,9 +80,36 @@ async fn index_serves_embedded_page() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let html = String::from_utf8(bytes.to_vec()).unwrap();
+    assert!(content_type.starts_with("text/html"));
     assert!(html.contains("aikit"));
+    assert!(html.contains("/app.js"));
+}
+
+#[tokio::test]
+async fn static_assets_serve_with_content_types() {
+    let app = app();
+    for (path, expected) in [("/app.js", "javascript"), ("/style.css", "text/css")] {
+        let response = app
+            .clone()
+            .oneshot(Request::get(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        assert!(content_type.contains(expected), "{path}: {content_type}");
+    }
 }
 
 #[tokio::test]

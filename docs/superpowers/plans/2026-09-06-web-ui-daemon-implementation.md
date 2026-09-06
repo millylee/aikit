@@ -72,9 +72,9 @@
 
 ### Phase 5 — Web UI (Chinese, vanilla JS)
 
-- [ ] Layout: 供应商 / 密钥 / 模型 / 应用目标（Claude Code、Codex、Pin、1M、Bypass）/ 操作（应用、导入、刷新、检查更新）panels mirroring TUI capabilities.
-- [ ] Login gate: token input → localStorage; all fetches carry bearer token; masked key display with create/replace flows.
-- [ ] Status feedback and error display for every action; Chinese labels throughout.
+- [x] Layout: 供应商 / 密钥 / 模型 / 应用目标（Claude Code、Codex、Pin、1M、Bypass）/ 操作（应用、导入、刷新、检查更新）panels mirroring TUI capabilities.
+- [x] Login gate: token input → localStorage; all fetches carry bearer token; masked key display with create/replace flows.
+- [x] Status feedback and error display for every action; Chinese labels throughout.
 
 ### Phase 6 — tests, CI, release
 
