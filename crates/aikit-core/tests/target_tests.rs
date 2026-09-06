@@ -33,7 +33,12 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     assert!(updated.contains("https://example.com/v1"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
     let provider = parsed.get("model_providers").and_then(|v| v.get("aikit"));
-    assert!(provider.and_then(|v| v.get("env_key")).is_none());
+    assert_eq!(
+        provider
+            .and_then(|v| v.get("env_key"))
+            .and_then(|v| v.as_str()),
+        Some("AIKIT_API_KEY")
+    );
 
     let auth_path = dir.path().join("auth.json");
     assert!(auth_path.exists());
@@ -72,7 +77,12 @@ fn codex_writer_creates_missing_config() {
     assert!(updated.contains("model-new"));
     let parsed: toml::Value = toml::from_str(&updated).unwrap();
     let provider = parsed.get("model_providers").and_then(|v| v.get("aikit"));
-    assert!(provider.and_then(|v| v.get("env_key")).is_none());
+    assert_eq!(
+        provider
+            .and_then(|v| v.get("env_key"))
+            .and_then(|v| v.as_str()),
+        Some("AIKIT_API_KEY")
+    );
 
     let auth_path = tool_dir.join("auth.json");
     assert!(auth_path.exists());
@@ -192,7 +202,10 @@ fn codex_writer_serializes_special_characters_in_toml() {
         Some(selection.base_url.as_str())
     );
     assert!(provider.get("api_key").is_none());
-    assert!(provider.get("env_key").is_none());
+    assert_eq!(
+        provider.get("env_key").and_then(|v| v.as_str()),
+        Some("AIKIT_API_KEY")
+    );
     assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
 
     let auth_path = dir.path().join("auth.json");

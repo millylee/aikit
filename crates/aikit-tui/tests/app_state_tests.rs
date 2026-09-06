@@ -642,7 +642,12 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     let provider = codex
         .get("model_providers")
         .and_then(|value| value.get("aikit"));
-    assert!(provider.and_then(|value| value.get("env_key")).is_none());
+    assert_eq!(
+        provider
+            .and_then(|value| value.get("env_key"))
+            .and_then(|value| value.as_str()),
+        Some("AIKIT_API_KEY")
+    );
 
     let auth_path = dir.path().join(".codex").join("auth.json");
     assert!(auth_path.exists());
