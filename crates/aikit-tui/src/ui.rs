@@ -333,6 +333,34 @@ fn targets_text(state: &AppState) -> String {
     };
     lines.push(format!("{ctx_cursor} {ctx_enabled} Claude 1M context"));
 
+    let claude_bypass_cursor = if state.target_index == target_count + 2 {
+        ">"
+    } else {
+        " "
+    };
+    let claude_bypass_enabled = if state.config.claude_bypass_permissions {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!(
+        "{claude_bypass_cursor} {claude_bypass_enabled} Claude bypass permissions"
+    ));
+
+    let codex_bypass_cursor = if state.target_index == target_count + 3 {
+        ">"
+    } else {
+        " "
+    };
+    let codex_bypass_enabled = if state.config.codex_bypass_permissions {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!(
+        "{codex_bypass_cursor} {codex_bypass_enabled} Codex bypass permissions"
+    ));
+
     lines.join("\n")
 }
 

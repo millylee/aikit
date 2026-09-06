@@ -66,6 +66,25 @@ impl CodexWriter {
         root.insert("model".into(), toml::Value::String(selection.model.clone()));
         root.insert("model_provider".into(), toml::Value::String("aikit".into()));
 
+        if selection.codex_bypass_permissions {
+            root.insert(
+                "approval_policy".into(),
+                toml::Value::String("never".into()),
+            );
+            root.insert(
+                "sandbox_mode".into(),
+                toml::Value::String("danger-full-access".into()),
+            );
+        } else {
+            if root.get("approval_policy").and_then(toml::Value::as_str) == Some("never") {
+                root.remove("approval_policy");
+            }
+            if root.get("sandbox_mode").and_then(toml::Value::as_str) == Some("danger-full-access")
+            {
+                root.remove("sandbox_mode");
+            }
+        }
+
         let mut model_providers = match root.remove("model_providers") {
             Some(toml::Value::Table(table)) => table,
             Some(_) => {

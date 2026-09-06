@@ -102,6 +102,25 @@ impl ClaudeWriter {
         }
         object.insert("model".into(), Value::String(effective_model.clone()));
 
+        if selection.claude_bypass_permissions {
+            let permissions = object
+                .entry("permissions")
+                .or_insert_with(|| serde_json::json!({}));
+            let permissions_object = permissions.as_object_mut().ok_or_else(|| {
+                AikitError::TargetWrite("claude permissions config must be an object".into())
+            })?;
+            permissions_object.insert(
+                "defaultMode".into(),
+                Value::String("bypassPermissions".into()),
+            );
+        } else if let Some(permissions) =
+            object.get_mut("permissions").and_then(Value::as_object_mut)
+        {
+            if permissions.get("defaultMode").and_then(Value::as_str) == Some("bypassPermissions") {
+                permissions.remove("defaultMode");
+            }
+        }
+
         let content = serde_json::to_string_pretty(&value).map_err(|err| {
             AikitError::TargetWrite(format!("failed to serialize claude config: {err}"))
         })?;

@@ -17,6 +17,8 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
         &backup_root,
     )
@@ -58,6 +60,8 @@ fn codex_writer_creates_missing_config() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -93,6 +97,8 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -114,6 +120,8 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -136,6 +144,8 @@ fn codex_writer_refuses_invalid_existing_toml() {
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -155,6 +165,8 @@ fn codex_writer_serializes_special_characters_in_toml() {
         model: "model\\with\"quotes".into(),
         claude_pin_models: false,
         claude_1m_context: false,
+        claude_bypass_permissions: false,
+        codex_bypass_permissions: false,
     };
 
     CodexWriter::write_to_path(&path, &selection).unwrap();
@@ -221,6 +233,8 @@ model = "keep-me"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
         &dir.path().join("aikit"),
     )
@@ -281,6 +295,8 @@ model_providers = "not-a-table"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -308,6 +324,8 @@ aikit = "not-a-table"
             model: "model-new".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -330,6 +348,8 @@ fn claude_writer_creates_minimal_json_config() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -355,6 +375,8 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -381,6 +403,8 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
         &backup_root,
     )
@@ -412,6 +436,8 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             model: "claude-model".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     );
 
@@ -434,6 +460,8 @@ fn claude_writer_pins_all_model_env_vars_when_enabled() {
             model: "glm-5.2".into(),
             claude_pin_models: true,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
         &backup_root,
     )
@@ -474,6 +502,8 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
             model: "glm-5.2".into(),
             claude_pin_models: true,
             claude_1m_context: true,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -511,6 +541,8 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
             model: "glm-5.2[1m]".into(),
             claude_pin_models: false,
             claude_1m_context: true,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -548,6 +580,8 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             model: "glm-5.2".into(),
             claude_pin_models: false,
             claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
         },
     )
     .unwrap();
@@ -569,4 +603,177 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             "expected {var} removed when disabled"
         );
     }
+}
+
+#[test]
+fn claude_writer_sets_bypass_permissions_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"theme":"dark","permissions":{"allow":["Bash(ls:*)"]}}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: true,
+            codex_bypass_permissions: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["permissions"]["defaultMode"], "bypassPermissions");
+    assert_eq!(value["permissions"]["allow"][0], "Bash(ls:*)");
+    assert_eq!(value["theme"], "dark");
+}
+
+#[test]
+fn claude_writer_removes_bypass_permissions_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"permissions":{"defaultMode":"bypassPermissions","allow":["Bash(ls:*)"]}}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(value["permissions"].get("defaultMode").is_none());
+    assert_eq!(value["permissions"]["allow"][0], "Bash(ls:*)");
+}
+
+#[test]
+fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"permissions":{"defaultMode":"acceptEdits"}}"#).unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["permissions"]["defaultMode"], "acceptEdits");
+}
+
+#[test]
+fn codex_writer_sets_bypass_permissions_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+
+    CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: true,
+        },
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        parsed.get("approval_policy").and_then(|v| v.as_str()),
+        Some("never")
+    );
+    assert_eq!(
+        parsed.get("sandbox_mode").and_then(|v| v.as_str()),
+        Some("danger-full-access")
+    );
+}
+
+#[test]
+fn codex_writer_removes_bypass_permissions_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "model = \"old\"\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n",
+    )
+    .unwrap();
+
+    CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
+        },
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(parsed.get("approval_policy").is_none());
+    assert!(parsed.get("sandbox_mode").is_none());
+}
+
+#[test]
+fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\napproval_policy = \"untrusted\"\n").unwrap();
+
+    CodexWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            claude_1m_context: false,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
+        },
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        parsed.get("approval_policy").and_then(|v| v.as_str()),
+        Some("untrusted")
+    );
 }

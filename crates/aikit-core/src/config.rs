@@ -22,6 +22,10 @@ pub struct AikitConfig {
     pub claude_pin_models: bool,
     #[serde(default = "default_true")]
     pub claude_1m_context: bool,
+    #[serde(default)]
+    pub claude_bypass_permissions: bool,
+    #[serde(default)]
+    pub codex_bypass_permissions: bool,
     #[serde(default, skip_serializing)]
     pub backup_history: Vec<BackupRecord>,
 }
@@ -128,6 +132,8 @@ impl Default for AikitConfig {
             ],
             claude_pin_models: true,
             claude_1m_context: true,
+            claude_bypass_permissions: false,
+            codex_bypass_permissions: false,
             backup_history: Vec::new(),
         }
     }
