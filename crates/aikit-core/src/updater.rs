@@ -15,7 +15,9 @@ use crate::{AikitError, Result};
 
 pub const UPDATE_CHECK_COOLDOWN: Duration = Duration::hours(24);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub const LATEST_RELEASE_URL: &str = "https://github.com/millylee/aikit/releases/latest";
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct UpdateCheckOutcome {
     pub current_version: String,
     pub latest_version: String,

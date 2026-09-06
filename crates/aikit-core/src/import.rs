@@ -8,7 +8,9 @@ use toml::Value as TomlValue;
 
 use crate::config::{ActiveSelection, AikitConfig, ApiKeyConfig, ProviderConfig};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum ImportSource {
     Env,
     Claude,
@@ -16,7 +18,7 @@ pub enum ImportSource {
     Codex,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ImportCandidate {
     pub source: ImportSource,
     pub provider_id: String,
@@ -28,13 +30,13 @@ pub struct ImportCandidate {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ImportPlan {
     pub candidates: Vec<ImportCandidate>,
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ImportResult {
     pub added_providers: usize,
     pub updated_providers: usize,

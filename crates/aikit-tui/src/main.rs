@@ -7,7 +7,7 @@ use aikit_core::{
     config::default_config_path,
     import::candidate_fingerprint,
     provider::OpenAiCompatibleClient,
-    updater::{self, StageUpdateOutcome},
+    updater::{self, StageUpdateOutcome, LATEST_RELEASE_URL},
 };
 use aikit_tui::app::{format_refresh_error, AppState};
 use aikit_tui::input::{handle_key, AppAction};
@@ -21,8 +21,6 @@ use crossterm::terminal::{
 use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-
-const LATEST_RELEASE_URL: &str = "https://github.com/millylee/aikit/releases/latest";
 
 #[derive(Parser)]
 #[command(

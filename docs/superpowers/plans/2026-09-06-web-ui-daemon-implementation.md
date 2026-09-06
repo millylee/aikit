@@ -63,12 +63,12 @@
 
 ### Phase 4 — write APIs
 
-- [ ] Provider CRUD: `POST /api/providers`, `PUT /api/providers/:id`, `DELETE /api/providers/:id` (validate via `ProviderForm`).
-- [ ] Key endpoints: `POST .../keys` (create with plaintext value, stored), `PUT .../keys/:id`, `DELETE .../keys/:id`.
-- [ ] `PUT /api/selection` (active provider/key/model), `PUT /api/targets` (enabled flags + `bypass_permissions`), `POST /api/apply` (writes enabled targets with backup, returns per-target results).
-- [ ] `POST /api/import/scan`, `POST /api/import/apply` (reuse core import).
-- [ ] `POST /api/models/refresh`, `POST /api/updates/check`.
-- [ ] Every mutation persists via `save_with_sidecars`.
+- [x] Provider CRUD: `POST /api/providers`, `PUT /api/providers/:id`, `DELETE /api/providers/:id` (validate via `ProviderForm`).
+- [x] Key endpoints: `POST .../keys` (create with plaintext value, stored), `PUT .../keys/:id`, `DELETE .../keys/:id`.
+- [x] `PUT /api/selection` (active provider/key/model), `PUT /api/targets` (enabled flags + `bypass_permissions`), `POST /api/apply` (writes enabled targets with backup, returns per-target results).
+- [x] `POST /api/import/scan`, `POST /api/import/apply` (reuse core import).
+- [x] `POST /api/models/refresh`, `POST /api/updates/check`.
+- [x] Every mutation persists via `save_with_sidecars`.
 
 ### Phase 5 — Web UI (Chinese, vanilla JS)
 

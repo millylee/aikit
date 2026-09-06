@@ -1,5 +1,9 @@
+mod apply;
 mod config;
+mod import;
+mod models;
 mod providers;
+mod updates;
 
 use std::{
     path::{Path, PathBuf},
@@ -14,7 +18,7 @@ use axum::{
     http::{header, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
-    routing::get,
+    routing::{get, post, put},
     Json, Router,
 };
 
@@ -25,6 +29,7 @@ pub struct AppState {
     pub token: String,
     pub started_at: Instant,
     pub config_path: PathBuf,
+    pub client: reqwest::Client,
 }
 
 pub fn router(token: &str, config_path: PathBuf) -> Router {
@@ -32,13 +37,34 @@ pub fn router(token: &str, config_path: PathBuf) -> Router {
         token: token.to_string(),
         started_at: Instant::now(),
         config_path,
+        client: reqwest::Client::new(),
     };
 
     let protected = Router::new()
         .route("/ping", get(ping))
         .route("/config", get(config::get_config))
-        .route("/providers", get(providers::list_providers))
-        .route("/providers/{id}", get(providers::get_provider))
+        .route(
+            "/providers",
+            get(providers::list_providers).post(providers::create_provider),
+        )
+        .route(
+            "/providers/{id}",
+            get(providers::get_provider)
+                .put(providers::update_provider)
+                .delete(providers::delete_provider),
+        )
+        .route("/providers/{id}/keys", post(providers::create_api_key))
+        .route(
+            "/providers/{id}/keys/{key_id}",
+            put(providers::update_api_key).delete(providers::delete_api_key),
+        )
+        .route("/selection", put(apply::set_selection))
+        .route("/targets", put(apply::set_targets))
+        .route("/apply", post(apply::apply_selection))
+        .route("/import/scan", post(import::scan))
+        .route("/import/apply", post(import::apply))
+        .route("/models/refresh", post(models::refresh))
+        .route("/updates/check", post(updates::check))
         .layer(middleware::from_fn_with_state(state.clone(), auth));
 
     Router::new()
@@ -49,14 +75,25 @@ pub fn router(token: &str, config_path: PathBuf) -> Router {
 }
 
 pub fn load_config(path: &Path) -> Result<AikitConfig, aikit_core::AikitError> {
-    if !path.exists() {
-        return Ok(AikitConfig::default());
-    }
-    AikitConfig::load_with_sidecars(path)
+    aikit_core::apply::load_or_default(path)
+}
+
+pub fn mutate_config<F>(
+    state: &AppState,
+    mutation: F,
+) -> Result<AikitConfig, aikit_core::AikitError>
+where
+    F: FnOnce(&mut AikitConfig) -> Result<(), aikit_core::AikitError>,
+{
+    let mut config = load_config(&state.config_path)?;
+    mutation(&mut config)?;
+    config.save_with_sidecars(&state.config_path)?;
+    Ok(config)
 }
 
 pub enum ApiError {
     NotFound(String),
+    BadRequest(String),
     Internal(aikit_core::AikitError),
 }
 
@@ -64,6 +101,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             ApiError::NotFound(message) => (StatusCode::NOT_FOUND, message),
+            ApiError::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             ApiError::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
         };
         let body = Json(serde_json::json!({ "error": message }));
@@ -75,6 +113,21 @@ impl From<aikit_core::AikitError> for ApiError {
     fn from(err: aikit_core::AikitError) -> Self {
         ApiError::Internal(err)
     }
+}
+
+#[derive(serde::Deserialize)]
+pub struct ProviderPayload {
+    pub id: Option<String>,
+    pub name: String,
+    pub base_url: String,
+    pub enabled: bool,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ApiKeyPayload {
+    pub id: Option<String>,
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(serde::Serialize)]

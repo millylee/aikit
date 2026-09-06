@@ -64,6 +64,7 @@ version = "1.1.18"
 dependencies = [
  "aikit-core",
  "axum",
+ "directories",
  "hex",
  "http-body-util",
  "libc",

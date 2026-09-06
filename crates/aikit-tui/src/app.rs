@@ -1,10 +1,9 @@
 use std::path::Path;
 
 use aikit_core::{
-    cache::refresh_models,
     config::{
-        aikit_dir_for_config, default_config_path, load_sidecars, save_state, ActiveSelection,
-        AikitConfig, AikitState, ApiKeyConfig, ProviderConfig, TargetConfig,
+        aikit_dir_for_config, default_config_path, save_state, ActiveSelection, AikitConfig,
+        AikitState, ApiKeyConfig, ProviderConfig, TargetConfig,
     },
     config_ops::{
         add_api_key, add_provider, backup_config_file, delete_api_key, delete_model,
@@ -15,9 +14,7 @@ use aikit_core::{
         scan_env, ImportCandidate, ImportPlan,
     },
     provider::OpenAiCompatibleClient,
-    targets::{
-        claude::ClaudeWriter, codex::CodexWriter, TargetSelection, TargetWriteResult, TargetWriter,
-    },
+    targets::{claude::ClaudeWriter, codex::CodexWriter, TargetWriter},
     updater::{self, StageUpdateOutcome, UpdateCheckOutcome},
     AikitError, Result,
 };
@@ -1845,6 +1842,8 @@ impl AppCommandOutcome {
 
 const REFRESH_ERROR_MAX_CHARS: usize = 80;
 
+pub use aikit_core::apply::{active_target_selection, load_or_default};
+
 pub fn format_refresh_error(err: &AikitError) -> String {
     let detail = match err {
         AikitError::Provider(msg) => match msg.as_str() {
@@ -1871,59 +1870,28 @@ fn truncate_status_text(text: &str, max_chars: usize) -> String {
     truncated
 }
 
-pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> {
-    let active = config
-        .active_selection
-        .as_ref()
-        .ok_or_else(|| AikitError::ConfigParse("no active selection configured".into()))?;
-    let provider = config
-        .providers
-        .iter()
-        .find(|provider| provider.id == active.provider_id)
-        .ok_or_else(|| {
-            AikitError::ConfigParse(format!("active provider not found: {}", active.provider_id))
-        })?;
-    if !provider.enabled {
-        return Err(AikitError::ConfigParse(format!(
-            "active provider is disabled: {}",
-            active.provider_id
-        )));
-    }
-    let api_key = provider
-        .api_keys
-        .iter()
-        .find(|key| key.id == active.api_key_id)
-        .ok_or_else(|| {
-            AikitError::ConfigParse(format!("active api key not found: {}", active.api_key_id))
-        })?;
-    if active.model_id.trim().is_empty() {
-        return Err(AikitError::ConfigParse(format!(
-            "active model is empty for provider: {}",
-            active.provider_id
-        )));
-    }
-
-    Ok(TargetSelection {
-        base_url: provider.base_url.clone(),
-        api_key: api_key.value.clone(),
-        model: active.model_id.clone(),
-        claude_pin_models: config.claude_pin_models,
-        claude_1m_context: config.claude_1m_context,
-        bypass_permissions: config.bypass_permissions,
-    })
-}
-
 pub async fn refresh_active_models(
     config_path: &Path,
     client: &OpenAiCompatibleClient,
 ) -> Result<AppCommandOutcome> {
-    let config = load_or_default(config_path)?;
+    let config = aikit_core::apply::load_or_default(config_path)?;
     let active = config
         .active_selection
         .as_ref()
         .ok_or_else(|| AikitError::ConfigParse("no active selection configured".into()))?;
 
-    refresh_selected_models(config_path, &active.provider_id, &active.api_key_id, client).await
+    let count = aikit_core::cache::refresh_selected_models(
+        config_path,
+        &active.provider_id,
+        &active.api_key_id,
+        client,
+    )
+    .await?;
+    Ok(AppCommandOutcome::success(
+        format!("Refreshed {count} model(s)"),
+        count,
+        0,
+    ))
 }
 
 pub async fn refresh_selected_models(
@@ -1932,80 +1900,32 @@ pub async fn refresh_selected_models(
     api_key_id: &str,
     client: &OpenAiCompatibleClient,
 ) -> Result<AppCommandOutcome> {
-    let mut config = load_or_default(config_path)?;
-    let provider = config
-        .providers
-        .iter_mut()
-        .find(|provider| provider.id == provider_id)
-        .ok_or_else(|| {
-            AikitError::ConfigParse(format!("selected provider not found: {provider_id}"))
-        })?;
-
-    let result = refresh_models(provider, api_key_id, client).await;
-    let count = provider
-        .models_cache
-        .as_ref()
-        .map(|cache| cache.models.len())
-        .unwrap_or(0);
-    config.save_with_sidecars(config_path)?;
-
-    result.map(|_| AppCommandOutcome::success(format!("Refreshed {count} model(s)"), count, 0))
+    let count =
+        aikit_core::cache::refresh_selected_models(config_path, provider_id, api_key_id, client)
+            .await?;
+    Ok(AppCommandOutcome::success(
+        format!("Refreshed {count} model(s)"),
+        count,
+        0,
+    ))
 }
 
 pub fn apply_active_selection(config_path: &Path) -> Result<AppCommandOutcome> {
-    let config = load_or_default(config_path)?;
-    let selection = active_target_selection(&config)?;
-    let mut succeeded = 0;
-    let mut skipped = 0;
-    let mut failed = 0;
-    let mut target_statuses = Vec::new();
-
-    for target in config.targets.iter().filter(|target| target.enabled) {
-        match write_target(target, &selection, &aikit_dir_for_config(config_path)) {
-            Ok(_) => {
-                succeeded += 1;
-                target_statuses.push(TargetStatus {
-                    target_id: target.id.clone(),
-                    message: "applied".into(),
-                });
-            }
-            Err(AikitError::TargetSkipped(msg)) => {
-                skipped += 1;
-                target_statuses.push(TargetStatus {
-                    target_id: target.id.clone(),
-                    message: format!("skipped: {msg}"),
-                });
-            }
-            Err(err) => {
-                failed += 1;
-                target_statuses.push(TargetStatus {
-                    target_id: target.id.clone(),
-                    message: format!("failed: {err}"),
-                });
-            }
-        }
-    }
-
-    config.save_with_sidecars(config_path)?;
-    let mut outcome = AppCommandOutcome {
-        succeeded,
-        skipped,
-        failed,
-        message: format!("Applied {succeeded} target(s), {skipped} skipped, {failed} failed"),
-        target_statuses: Vec::new(),
-    };
-    outcome.target_statuses = target_statuses;
-    Ok(outcome)
-}
-
-fn load_or_default(config_path: &Path) -> Result<AikitConfig> {
-    if config_path.exists() {
-        AikitConfig::load_with_sidecars(config_path)
-    } else {
-        let mut config = AikitConfig::default();
-        load_sidecars(config_path, &mut config)?;
-        Ok(config)
-    }
+    let report = aikit_core::apply::apply_active_selection(config_path)?;
+    Ok(AppCommandOutcome {
+        succeeded: report.succeeded,
+        skipped: report.skipped,
+        failed: report.failed,
+        message: report.message,
+        target_statuses: report
+            .target_results
+            .into_iter()
+            .map(|result| TargetStatus {
+                target_id: result.target_id,
+                message: result.status,
+            })
+            .collect(),
+    })
 }
 
 fn provider_model_count(provider: &ProviderConfig) -> usize {
@@ -2181,32 +2101,4 @@ fn upsert_manual_model_and_maybe_activate(
         model_id: model.to_string(),
     });
     Ok(Some(format!("Saved provider and selected model {model}")))
-}
-
-fn write_target(
-    target: &TargetConfig,
-    selection: &TargetSelection,
-    backup_root: &Path,
-) -> Result<TargetWriteResult> {
-    match target.id.as_str() {
-        "claude" => {
-            let path = target
-                .config_path
-                .clone()
-                .map(Ok)
-                .unwrap_or_else(|| ClaudeWriter.default_path())?;
-            ClaudeWriter::write_to_path_with_backup_root(&path, selection, backup_root)
-        }
-        "codex" => {
-            let path = target
-                .config_path
-                .clone()
-                .map(Ok)
-                .unwrap_or_else(|| CodexWriter.default_path())?;
-            CodexWriter::write_to_path_with_backup_root(&path, selection, backup_root)
-        }
-        other => Err(AikitError::TargetWrite(format!(
-            "unknown target writer: {other}"
-        ))),
-    }
 }
