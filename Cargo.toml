@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/aikit-core", "crates/aikit-tui"]
+members = ["crates/aikit-core", "crates/aikit-daemon", "crates/aikit-tui"]
 resolver = "2"
 
 [workspace.package]
@@ -10,17 +10,23 @@ license = "BSD-2-Clause"
 repository = "https://github.com/millylee/aikit"
 
 [workspace.dependencies]
+aikit-core = { path = "crates/aikit-core" }
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 crossterm = "0.29"
 directories = "6"
 ratatui = "0.30"
 flate2 = "1"
 hex = "0.4"
+http-body-util = "0.1"
+rand = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tar = "0.4"
+tower = { version = "0.5", features = ["util"] }
 zip = "2"
 tempfile = "3"
 thiserror = "2"

@@ -1,0 +1,57 @@
+use aikit_daemon::lifecycle::{
+    read_daemon_info, remove_daemon_info, status, stop, write_daemon_info, DaemonInfo,
+    StatusReport, StopOutcome,
+};
+
+fn sample_info() -> DaemonInfo {
+    DaemonInfo {
+        pid: 4242,
+        port: 61234,
+    }
+}
+
+#[tokio::test]
+async fn daemon_info_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(read_daemon_info(dir.path()).is_none());
+
+    write_daemon_info(dir.path(), &sample_info()).unwrap();
+    assert_eq!(read_daemon_info(dir.path()), Some(sample_info()));
+
+    remove_daemon_info(dir.path());
+    assert!(read_daemon_info(dir.path()).is_none());
+}
+
+#[tokio::test]
+async fn status_reports_stopped_without_state() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(status(dir.path()).await.unwrap(), StatusReport::Stopped);
+}
+
+#[tokio::test]
+async fn status_reports_stale_when_probe_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    write_daemon_info(dir.path(), &sample_info()).unwrap();
+
+    assert_eq!(
+        status(dir.path()).await.unwrap(),
+        StatusReport::Stale {
+            info: sample_info()
+        }
+    );
+}
+
+#[tokio::test]
+async fn stop_is_idempotent_without_state() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(stop(dir.path()).await.unwrap(), StopOutcome::NotRunning);
+}
+
+#[tokio::test]
+async fn stop_cleans_up_stale_state() {
+    let dir = tempfile::tempdir().unwrap();
+    write_daemon_info(dir.path(), &sample_info()).unwrap();
+
+    assert_eq!(stop(dir.path()).await.unwrap(), StopOutcome::StaleRemoved);
+    assert!(read_daemon_info(dir.path()).is_none());
+}

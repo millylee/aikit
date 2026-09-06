@@ -45,10 +45,10 @@
 
 ### Phase 1 — CLI skeleton, serve, status, stop, token middleware
 
-- [ ] Add `clap` derive CLI in `aikit-tui/src/main.rs`: no subcommand → TUI; `daemon {start|stop|restart|status|serve}` with `--port` (default 7654) and `--bind` (default 127.0.0.1).
-- [ ] `aikit-daemon` crate skeleton with axum router: `GET /` (embedded placeholder page), `GET /api/health` returning version + uptime.
-- [ ] `token.rs`: generate on start, persist owner-only, axum middleware rejecting `/api/*` without `Authorization: Bearer <token>` (health stays open for probing).
-- [ ] `daemon.json` write on serve startup (pid, port); `status` reads it, HTTP-probes health, prints 运行中/已停止 + port + version; `stop` terminates by pid (Unix SIGTERM / Windows taskkill), removes daemon.json, idempotent when not running.
+- [x] Add `clap` derive CLI in `aikit-tui/src/main.rs`: no subcommand → TUI; `daemon {start|stop|restart|status|serve}` with `--port` (default 7654) and `--bind` (default 127.0.0.1).
+- [x] `aikit-daemon` crate skeleton with axum router: `GET /` (embedded placeholder page), `GET /api/health` returning version + uptime.
+- [x] `token.rs`: generate on start, persist owner-only, axum middleware rejecting `/api/*` without `Authorization: Bearer <token>` (health stays open for probing).
+- [x] `daemon.json` write on serve startup (pid, port); `status` reads it, HTTP-probes health, prints 运行中/已停止 + port + version; `stop` terminates by pid (Unix SIGTERM / Windows taskkill), removes daemon.json, idempotent when not running.
 
 ### Phase 2 — start / restart with detach and single instance
 

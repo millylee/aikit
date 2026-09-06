@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>aikit Web UI</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      max-width: 640px;
+      margin: 48px auto;
+      padding: 0 16px;
+      line-height: 1.7;
+    }
+    h1 { font-size: 1.5rem; }
+    code { background: rgba(127, 127, 127, 0.15); padding: 2px 6px; border-radius: 4px; }
+    #health { margin-top: 16px; padding: 12px 16px; border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>aikit Web UI</h1>
+  <p>完整配置界面将在后续版本提供（P5）。当前服务运行正常。</p>
+  <div id="health">正在获取服务状态…</div>
+  <script>
+    fetch("/api/health")
+      .then(function (response) { return response.json(); })
+      .then(function (health) {
+        document.getElementById("health").textContent =
+          "服务版本 " + health.version + " · 已运行 " + health.uptime_seconds + " 秒";
+      })
+      .catch(function () {
+        document.getElementById("health").textContent = "无法获取服务状态";
+      });
+  </script>
+</body>
+</html>
