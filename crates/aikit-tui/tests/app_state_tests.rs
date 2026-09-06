@@ -209,11 +209,16 @@ fn m_opens_add_model_modal() {
 async fn check_updates_reports_available_release() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/repos/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": "v999.0.0",
-            "assets": []
-        })))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/millylee/aikit/releases/tag/v999.0.0", server.uri()),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/tag/v999.0.0"))
+        .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
@@ -222,7 +227,7 @@ async fn check_updates_reports_available_release() {
     let outcome = state
         .check_updates(
             &client,
-            &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+            &format!("{}/millylee/aikit/releases/latest", server.uri()),
         )
         .await
         .unwrap();
@@ -236,11 +241,23 @@ async fn check_updates_reports_available_release() {
 async fn check_updates_reports_current_version_up_to_date() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/repos/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")),
-            "assets": []
-        })))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!(
+                "{}/millylee/aikit/releases/tag/v{}",
+                server.uri(),
+                env!("CARGO_PKG_VERSION")
+            ),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!(
+            "/millylee/aikit/releases/tag/v{}",
+            env!("CARGO_PKG_VERSION")
+        )))
+        .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
@@ -249,7 +266,7 @@ async fn check_updates_reports_current_version_up_to_date() {
     let outcome = state
         .check_updates(
             &client,
-            &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+            &format!("{}/millylee/aikit/releases/latest", server.uri()),
         )
         .await
         .unwrap();

@@ -18,7 +18,7 @@ use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/millylee/aikit/releases/latest";
+const LATEST_RELEASE_URL: &str = "https://github.com/millylee/aikit/releases/latest";
 
 struct TerminalGuard;
 

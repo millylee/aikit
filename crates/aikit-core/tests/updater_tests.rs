@@ -91,18 +91,23 @@ fn update_check_cooldown_inactive_when_never_checked() {
 async fn check_for_updates_detects_newer_release() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/repos/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": "v999.0.0",
-            "assets": []
-        })))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/millylee/aikit/releases/tag/v999.0.0", server.uri()),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/tag/v999.0.0"))
+        .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
     let client = reqwest::Client::new();
     let outcome = check_for_updates(
         &client,
-        &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+        &format!("{}/millylee/aikit/releases/latest", server.uri()),
     )
     .await
     .unwrap();
@@ -117,31 +122,31 @@ async fn download_and_stage_verifies_checksum_and_extracts_binary() {
     let (archive_bytes, archive_name, checksum) = archive_fixture();
 
     Mock::given(method("GET"))
-        .and(path("/repos/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "tag_name": "v2.0.0",
-            "assets": [
-                {
-                    "name": archive_name,
-                    "browser_download_url": format!("{}/archive", server.uri())
-                },
-                {
-                    "name": format!("{archive_name}.sha256"),
-                    "browser_download_url": format!("{}/checksum", server.uri())
-                }
-            ]
-        })))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/millylee/aikit/releases/tag/v2.0.0", server.uri()),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/tag/v2.0.0"))
+        .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/archive"))
+        .and(path(format!(
+            "/millylee/aikit/releases/download/v2.0.0/{archive_name}"
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(archive_bytes))
         .mount(&server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/checksum"))
+        .and(path(format!(
+            "/millylee/aikit/releases/download/v2.0.0/{archive_name}.sha256"
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_string(checksum))
         .mount(&server)
         .await;
@@ -149,7 +154,7 @@ async fn download_and_stage_verifies_checksum_and_extracts_binary() {
     let client = reqwest::Client::new();
     let staged = download_and_stage(
         &client,
-        &format!("{}/repos/millylee/aikit/releases/latest", server.uri()),
+        &format!("{}/millylee/aikit/releases/latest", server.uri()),
     )
     .await
     .unwrap();

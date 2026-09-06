@@ -6,7 +6,6 @@ use std::{
 
 use flate2::read::GzDecoder;
 use reqwest::Client;
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tar::Archive;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
@@ -37,18 +36,6 @@ pub struct ReleaseAssets {
     pub archive_url: String,
     pub checksum_name: String,
     pub checksum_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubLatestRelease {
-    tag_name: String,
-    assets: Vec<GithubAsset>,
 }
 
 pub fn release_target_triple() -> Result<&'static str> {
@@ -121,8 +108,8 @@ pub async fn check_for_updates(
     client: &Client,
     latest_release_url: &str,
 ) -> Result<UpdateCheckOutcome> {
-    let release = fetch_latest_release(client, latest_release_url).await?;
-    let latest_version = normalize_release_tag(&release.tag_name);
+    let tag_name = fetch_latest_release_tag(client, latest_release_url).await?;
+    let latest_version = normalize_release_tag(&tag_name);
     if latest_version.is_empty() {
         return Err(AikitError::Provider(
             "latest release does not include a tag_name".into(),
@@ -149,30 +136,18 @@ pub async fn fetch_release_assets(
     client: &Client,
     latest_release_url: &str,
 ) -> Result<ReleaseAssets> {
-    let release = fetch_latest_release(client, latest_release_url).await?;
+    let tag_name = fetch_latest_release_tag(client, latest_release_url).await?;
     let archive_name = release_archive_name()?;
     let checksum_name = format!("{archive_name}.sha256");
 
-    let archive_url = release
-        .assets
-        .iter()
-        .find(|asset| asset.name == archive_name)
-        .map(|asset| asset.browser_download_url.clone())
-        .ok_or_else(|| {
-            AikitError::Provider(format!("release does not include asset `{archive_name}`"))
-        })?;
-
-    let checksum_url = release
-        .assets
-        .iter()
-        .find(|asset| asset.name == checksum_name)
-        .map(|asset| asset.browser_download_url.clone())
-        .ok_or_else(|| {
-            AikitError::Provider(format!("release does not include asset `{checksum_name}`"))
-        })?;
+    let repo_base = latest_release_url
+        .trim_end_matches("/releases/latest")
+        .trim_end_matches('/');
+    let archive_url = format!("{repo_base}/releases/download/{tag_name}/{archive_name}");
+    let checksum_url = format!("{repo_base}/releases/download/{tag_name}/{checksum_name}");
 
     Ok(ReleaseAssets {
-        tag_name: release.tag_name,
+        tag_name,
         archive_name,
         archive_url,
         checksum_name,
@@ -370,21 +345,30 @@ pub fn spawn_windows_replacer(_staged: &Path, _target: &Path) -> Result<()> {
     ))
 }
 
-async fn fetch_latest_release(
-    client: &Client,
-    latest_release_url: &str,
-) -> Result<GithubLatestRelease> {
-    client
+async fn fetch_latest_release_tag(client: &Client, latest_release_url: &str) -> Result<String> {
+    let response = client
         .get(latest_release_url)
         .header("User-Agent", "aikit")
         .send()
         .await
         .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
         .error_for_status()
-        .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
-        .json::<GithubLatestRelease>()
-        .await
-        .map_err(|err| AikitError::Provider(format!("update response parse failed: {err}")))
+        .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?;
+    parse_release_tag_from_url(response.url().as_str())
+}
+
+fn parse_release_tag_from_url(url: &str) -> Result<String> {
+    let tag = url
+        .split("/tag/")
+        .last()
+        .unwrap_or_default()
+        .trim_matches('/');
+    if tag.is_empty() {
+        return Err(AikitError::Provider(format!(
+            "could not determine latest release tag from {url}"
+        )));
+    }
+    Ok(tag.to_string())
 }
 
 async fn download_bytes(client: &Client, url: &str) -> Result<Vec<u8>> {
