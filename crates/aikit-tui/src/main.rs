@@ -443,7 +443,7 @@ mod tests {
     fn startup_update_failure_status_names_the_pending_directory_and_how_to_cancel() {
         let directory = tempfile::tempdir().unwrap();
         let status =
-            startup_update_failure_status(&AikitError::Provider("boom".into()), directory.path());
+            startup_update_failure_status(AikitError::Provider("boom".into()), directory.path());
 
         assert!(status.contains("boom"));
         let pending = directory.path().join("pending-update");
