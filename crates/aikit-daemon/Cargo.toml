@@ -9,7 +9,6 @@ repository.workspace = true
 aikit-core.workspace = true
 axum.workspace = true
 directories.workspace = true
-hex.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true

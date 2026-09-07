@@ -158,12 +158,25 @@ async fn run_daemon(action: DaemonAction) -> Result<()> {
 
 fn report_start(outcome: aikit_daemon::lifecycle::StartOutcome, dir: &std::path::Path) {
     match outcome {
-        aikit_daemon::lifecycle::StartOutcome::Started { pid, url } => {
+        aikit_daemon::lifecycle::StartOutcome::Started {
+            pid,
+            url,
+            token,
+            token_created,
+        } => {
             println!("后台服务已启动：pid {pid}（{url}）");
-            println!(
-                "访问令牌文件：{}",
-                aikit_daemon::token::token_path(dir).display()
-            );
+            if token_created {
+                println!("首次生成访问令牌：{token}");
+                println!(
+                    "登录 Web UI 时输入它即可；如需更换，可编辑 {}（重启后台服务后生效）",
+                    aikit_daemon::token::token_path(dir).display()
+                );
+            } else {
+                println!(
+                    "访问令牌文件：{}",
+                    aikit_daemon::token::token_path(dir).display()
+                );
+            }
         }
         aikit_daemon::lifecycle::StartOutcome::AlreadyRunning { info } => println!(
             "后台服务已在运行：pid {}（{}）",

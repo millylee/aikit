@@ -99,8 +99,15 @@ pub async fn stop(aikit_dir: &Path) -> Result<StopOutcome> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StartOutcome {
-    Started { pid: u32, url: String },
-    AlreadyRunning { info: DaemonInfo },
+    Started {
+        pid: u32,
+        url: String,
+        token: String,
+        token_created: bool,
+    },
+    AlreadyRunning {
+        info: DaemonInfo,
+    },
 }
 
 pub async fn ensure_startable(aikit_dir: &Path) -> Result<Option<DaemonInfo>> {
@@ -118,6 +125,11 @@ pub async fn start(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOut
         return Ok(StartOutcome::AlreadyRunning { info });
     }
 
+    // Generate the token up front so the CLI can show it (especially on the
+    // very first run); the spawned serve process reuses the same file.
+    let token_created = crate::token::read_valid_token(aikit_dir).is_none();
+    let token = crate::token::ensure_token(aikit_dir)?;
+
     let mut child = spawn_serve(bind, port)?;
     let deadline = Instant::now() + START_READINESS_TIMEOUT;
     loop {
@@ -130,6 +142,8 @@ pub async fn start(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOut
             return Ok(StartOutcome::Started {
                 pid: child.id(),
                 url: format_http_url(bind, port),
+                token,
+                token_created,
             });
         }
         if Instant::now() >= deadline {

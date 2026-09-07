@@ -3,6 +3,7 @@
 
   var TOKEN_KEY = "aikit_token";
   var state = { config: null, providerId: null, mode: "view" };
+  var targetsRequestId = 0;
 
   function $(id) { return document.getElementById(id); }
   function el(tag, attrs, children) {
@@ -17,8 +18,12 @@
   }
 
   function setStatus(message, kind) {
-    $("status").textContent = message;
-    $("status").className = "status " + (kind || "");
+    var container = $("toasts");
+    if (!container) return;
+    var toast = el("div", { "class": "toast " + (kind || "") }, [el("span", { text: message })]);
+    container.appendChild(toast);
+    setTimeout(function () { toast.classList.add("leaving"); }, 2600);
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
   }
 
   function api(method, path, body) {
@@ -46,7 +51,7 @@
 
   function showApp() {
     $("login").style.display = "none";
-    $("app").style.display = "block";
+    $("app").style.display = "flex";
   }
 
   function login() {
@@ -66,7 +71,15 @@
     fetch("/api/health").then(function (r) { return r.json(); }).then(function (health) {
       $("health-meta").textContent = "v" + health.version + " · 已运行 " + health.uptime_seconds + " 秒";
     });
+    var requestIdAtStart = targetsRequestId;
     api("GET", "/api/config").then(function (config) {
+      if (targetsRequestId !== requestIdAtStart) {
+        // A target toggle raced this refresh; keep the toggled fields.
+        config.targets = state.config.targets;
+        config.claude_pin_models = state.config.claude_pin_models;
+        config.claude_1m_context = state.config.claude_1m_context;
+        config.bypass_permissions = state.config.bypass_permissions;
+      }
       state.config = config;
       if (!state.providerId && config.providers.length) {
         state.providerId = config.active_selection
@@ -126,7 +139,7 @@
     body.appendChild(info);
 
     body.appendChild(el("h2", { text: "API 密钥" }));
-    var keys = el("ul", { "class": "plain" });
+    var keys = el("ul", { "class": "plain keys-list" });
     provider.api_keys.forEach(function (key) {
       keys.appendChild(el("li", { "class": isActive(provider.id, key.id) ? "active" : "" }, [
         el("span", { text: key.name + " " }),
@@ -150,7 +163,7 @@
     var models = provider.models_cache ? provider.models_cache.models : [];
     var manual = provider.manual_models || [];
     var all = models.concat(manual.filter(function (m) { return models.indexOf(m) < 0; }));
-    var modelList = el("ul", { "class": "plain" });
+    var modelList = el("ul", { "class": "plain model-list" });
     if (!all.length) modelList.appendChild(el("li", {}, [el("span", { "class": "muted", text: "暂无模型，请先刷新或手动添加" })]));
     all.forEach(function (model) {
       modelList.appendChild(el("li", { "class": isActive(provider.id, null, model) ? "active" : "" }, [
@@ -163,7 +176,7 @@
       el("button", { "class": "small", text: "刷新模型列表", onclick: function () { refreshModels(provider); } })
     ]));
     if (provider.models_cache && provider.models_cache.last_error) {
-      body.appendChild(el("p", { "class": "status error", text: "上次刷新失败：" + provider.models_cache.last_error }));
+      body.appendChild(el("p", { "class": "inline-error", text: "上次刷新失败：" + provider.models_cache.last_error }));
     }
   }
 
@@ -255,8 +268,8 @@
     config.targets.forEach(function (target) {
       var check = el("input", { type: "checkbox" });
       check.checked = target.enabled;
-      check.onchange = function () { updateTargets({ targets: [{ id: target.id, enabled: check.checked }] }); };
-      body.appendChild(el("div", { "class": "check" }, [check, el("span", { text: targetDisplayName(target.id) })]));
+      check.onchange = function () { toggleTargets({ targets: [{ id: target.id, enabled: check.checked }] }); };
+      body.appendChild(el("label", { "class": "check" }, [check, el("span", { text: targetDisplayName(target.id) })]));
     });
     [["claude_pin_models", "固定所有 Claude 模型", config.claude_pin_models],
      ["claude_1m_context", "Claude 1M 上下文", config.claude_1m_context],
@@ -265,8 +278,8 @@
       check.checked = item[2];
       var payload = {};
       payload[item[0]] = check.checked;
-      check.onchange = function () { updateTargets(payload); };
-      body.appendChild(el("div", { "class": "check" }, [check, el("span", { text: item[1] })]));
+      check.onchange = function () { toggleTargets(payload); };
+      body.appendChild(el("label", { "class": "check" }, [check, el("span", { text: item[1] })]));
     });
   }
 
@@ -274,21 +287,64 @@
     return { claude: "Claude Code", codex: "Codex CLI" }[id] || id;
   }
 
-  function updateTargets(payload) {
+  // Optimistically apply the payload to local state so the checkbox reflects
+  // the click immediately, then send it. Only the newest request may write
+  // its response back, so a slow earlier response cannot revert later toggles.
+  function toggleTargets(payload) {
+    applyTargetsPayloadLocally(payload);
+    renderTargets();
+    var id = ++targetsRequestId;
     api("PUT", "/api/targets", payload)
-      .then(function (config) { state.config = config; renderTargets(); setStatus("已更新", "ok"); })
-      .catch(function (err) { setStatus("更新失败：" + err.message, "error"); });
+      .then(function (config) {
+        if (id !== targetsRequestId) return;
+        state.config.targets = config.targets;
+        state.config.claude_pin_models = config.claude_pin_models;
+        state.config.claude_1m_context = config.claude_1m_context;
+        state.config.bypass_permissions = config.bypass_permissions;
+        renderTargets();
+        setStatus("已更新", "ok");
+      })
+      .catch(function (err) {
+        if (id !== targetsRequestId) return;
+        refreshTargetsOnly();
+        setStatus("更新失败：" + err.message, "error");
+      });
+  }
+
+  function applyTargetsPayloadLocally(payload) {
+    (payload.targets || []).forEach(function (update) {
+      var target = state.config.targets.find(function (t) { return t.id === update.id; });
+      if (target) target.enabled = update.enabled;
+    });
+    ["claude_pin_models", "claude_1m_context", "bypass_permissions"].forEach(function (key) {
+      if (key in payload) state.config[key] = payload[key];
+    });
+  }
+
+  function refreshTargetsOnly() {
+    api("GET", "/api/config").then(function (config) {
+      state.config.targets = config.targets;
+      state.config.claude_pin_models = config.claude_pin_models;
+      state.config.claude_1m_context = config.claude_1m_context;
+      state.config.bypass_permissions = config.bypass_permissions;
+      renderTargets();
+    }).catch(function () {});
   }
 
   function applySelection() {
     setStatus("正在应用…");
     api("POST", "/api/apply")
       .then(function (report) {
-        setStatus(report.message, report.failed > 0 ? "error" : "ok");
-        if (report.target_results) {
+        if (report.target_results && report.target_results.length) {
           report.target_results.forEach(function (result) {
-            if (result.status !== "applied") setStatus(result.target_id + "：" + result.status, "error");
+            var ok = result.status === "applied";
+            setStatus(targetDisplayName(result.target_id) + "：" + result.status, ok ? "ok" : "error");
           });
+        }
+        if (report.succeeded === 0 && report.failed === 0) {
+          setStatus("未应用任何目标：请先勾选【应用目标】中的项", "error");
+        } else {
+          setStatus(report.message, report.failed > 0 ? "error" : "ok");
         }
       })
       .catch(function (err) { setStatus("应用失败：" + err.message, "error"); });
@@ -308,8 +364,10 @@
         check.checked = true;
         checks.push({ check: check, candidate: candidate });
         list.appendChild(el("li", {}, [
-          check,
-          el("span", { text: candidate.provider_name + "（" + candidate.source + "）" })
+          el("label", { "class": "check" }, [
+            check,
+            el("span", { text: candidate.provider_name + "（" + candidate.source + "）" })
+          ])
         ]));
       });
       body.appendChild(list);

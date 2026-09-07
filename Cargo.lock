@@ -65,7 +65,6 @@ dependencies = [
  "aikit-core",
  "axum",
  "directories",
- "hex",
  "http-body-util",
  "libc",
  "rand 0.9.4",
