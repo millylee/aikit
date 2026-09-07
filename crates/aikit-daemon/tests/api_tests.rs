@@ -109,7 +109,24 @@ async fn static_assets_serve_with_content_types() {
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default();
         assert!(content_type.contains(expected), "{path}: {content_type}");
+        let cache_control = response
+            .headers()
+            .get("cache-control")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        assert_eq!(cache_control, "no-store", "{path} must not be cacheable");
     }
+    let response = app
+        .oneshot(Request::get("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let cache_control = response
+        .headers()
+        .get("cache-control")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    assert_eq!(cache_control, "no-store", "index must not be cacheable");
 }
 
 #[tokio::test]
