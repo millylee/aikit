@@ -92,6 +92,9 @@ fn spawn_health_endpoint() -> u16 {
 }
 
 #[tokio::test]
+// The guard must span the await: the proxy env vars are process-global, so
+// the lock keeps other tests from observing them while this probe runs.
+#[allow(clippy::await_holding_lock)]
 async fn probe_alive_connects_directly_ignoring_proxy_environment() {
     let _lock = PROXY_ENV_LOCK.lock().unwrap();
     let _proxy_env = ProxyEnvGuard::arm(1);

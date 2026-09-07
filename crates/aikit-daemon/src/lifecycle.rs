@@ -207,7 +207,7 @@ async fn wait_for_readiness(
                 // The health response may come from an unrelated process
                 // holding the port while our spawn failed to bind; a ready
                 // daemon always records its own pid first.
-                if !read_daemon_info(aikit_dir).is_some_and(|info| info.pid == child.id()) {
+                if read_daemon_info(aikit_dir).is_none_or(|info| info.pid != child.id()) {
                     return Err(AikitError::Provider(format!(
                         "port {port} is already served by another process"
                     )));
