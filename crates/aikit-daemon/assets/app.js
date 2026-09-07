@@ -276,9 +276,11 @@
      ["bypass_permissions", "Bypass 权限（危险）", config.bypass_permissions]].forEach(function (item) {
       var check = el("input", { type: "checkbox" });
       check.checked = item[2];
-      var payload = {};
-      payload[item[0]] = check.checked;
-      check.onchange = function () { toggleTargets(payload); };
+      check.onchange = function () {
+        var payload = {};
+        payload[item[0]] = check.checked;
+        toggleTargets(payload);
+      };
       body.appendChild(el("label", { "class": "check" }, [check, el("span", { text: item[1] })]));
     });
   }

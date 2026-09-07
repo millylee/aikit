@@ -113,10 +113,13 @@ Modal form keys:
 
 ## Development
 
+Web UI regression tests use Node.js 24 and require no npm dependencies.
+
 ```sh
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+node --test crates/aikit-daemon/tests/web_ui.test.mjs
 ```
 
 Run the TUI locally:

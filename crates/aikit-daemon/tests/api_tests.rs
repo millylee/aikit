@@ -398,28 +398,41 @@ async fn selection_validation_returns_bad_request() {
 #[tokio::test]
 async fn targets_update_toggles_flags() {
     let dir = tempfile::tempdir().unwrap();
-    let app = router("test-token", dir.path().join("config.toml"));
+    let config_path = dir.path().join("config.toml");
+    let app = router("test-token", config_path.clone());
 
-    let response = app
-        .oneshot(put_json(
-            "/api/targets",
-            serde_json::json!({
-                "targets": [{ "id": "claude", "enabled": true }],
-                "bypass_permissions": true
-            }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let json = body_json(response).await;
-    let claude = json["targets"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|target| target["id"] == "claude")
-        .unwrap();
-    assert_eq!(claude["enabled"], true);
-    assert_eq!(json["bypass_permissions"], true);
+    for enabled in [true, false, true, false] {
+        let response = app
+            .clone()
+            .oneshot(put_json(
+                "/api/targets",
+                serde_json::json!({
+                    "targets": [{ "id": "claude", "enabled": enabled }],
+                    "claude_pin_models": enabled,
+                    "claude_1m_context": enabled,
+                    "bypass_permissions": enabled
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_json(response).await;
+        let claude = json["targets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|target| target["id"] == "claude")
+            .unwrap();
+        assert_eq!(claude["enabled"], enabled);
+        assert_eq!(json["claude_pin_models"], enabled);
+        assert_eq!(json["claude_1m_context"], enabled);
+        assert_eq!(json["bypass_permissions"], enabled);
+
+        let saved = AikitConfig::load_from(&config_path).unwrap();
+        assert_eq!(saved.claude_pin_models, enabled);
+        assert_eq!(saved.claude_1m_context, enabled);
+        assert_eq!(saved.bypass_permissions, enabled);
+    }
 }
 
 #[tokio::test]
@@ -490,6 +503,59 @@ async fn apply_writes_enabled_targets() {
     let written = std::fs::read_to_string(codex_dir.join("config.toml")).unwrap();
     assert!(written.contains("AIKIT_API_KEY"));
     assert!(written.contains("glm-5.3"));
+}
+
+#[tokio::test]
+async fn apply_toggles_codex_bypass_permissions() {
+    let (app, dir) = seeded_router();
+    let codex_dir = dir.path().join(".codex");
+    std::fs::create_dir_all(&codex_dir).unwrap();
+    let codex_path = codex_dir.join("config.toml");
+
+    let response = app
+        .clone()
+        .oneshot(put_json(
+            "/api/targets",
+            serde_json::json!({
+                "targets": [
+                    { "id": "claude", "enabled": false },
+                    { "id": "codex", "enabled": true, "config_path": codex_path }
+                ]
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    for enabled in [true, false, true, false] {
+        let response = app
+            .clone()
+            .oneshot(put_json(
+                "/api/targets",
+                serde_json::json!({ "bypass_permissions": enabled }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_json(response).await["bypass_permissions"], enabled);
+
+        let response = app
+            .clone()
+            .oneshot(post_json("/api/apply", serde_json::json!({})))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let report = body_json(response).await;
+        assert_eq!(report["succeeded"], 1);
+        assert_eq!(report["failed"], 0);
+
+        let written = std::fs::read_to_string(&codex_path).unwrap();
+        assert_eq!(written.contains("approval_policy = \"never\""), enabled);
+        assert_eq!(
+            written.contains("sandbox_mode = \"danger-full-access\""),
+            enabled
+        );
+    }
 }
 
 #[tokio::test]
