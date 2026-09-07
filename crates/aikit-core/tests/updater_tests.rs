@@ -98,7 +98,8 @@ async fn mock_release_asset(
             "/millylee/aikit/releases/download/{tag}/{name}"
         )))
         .respond_with(response)
-        .expect(1)
+        // Successful downloads hit once; transient failures are retried.
+        .expect(1..=3)
         .mount(server)
         .await;
 }
@@ -160,6 +161,41 @@ fn update_check_cooldown_inactive_when_never_checked() {
 #[tokio::test]
 async fn check_for_updates_detects_newer_release() {
     let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/millylee/aikit/releases/tag/v999.0.0", server.uri()),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/tag/v999.0.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    let client = reqwest::Client::new();
+    let outcome = check_for_updates(
+        &client,
+        &format!("{}/millylee/aikit/releases/latest", server.uri()),
+    )
+    .await
+    .unwrap();
+
+    assert!(outcome.update_available);
+    assert_eq!(outcome.latest_version, "999.0.0");
+}
+
+#[tokio::test]
+async fn check_for_updates_retries_transient_server_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/millylee/aikit/releases/latest"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(2)
+        .mount(&server)
+        .await;
     Mock::given(method("GET"))
         .and(path("/millylee/aikit/releases/latest"))
         .respond_with(ResponseTemplate::new(302).insert_header(

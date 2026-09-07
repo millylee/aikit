@@ -289,15 +289,48 @@ pub async fn stage_update_with_progress(
 }
 
 async fn fetch_latest_release_tag(client: &Client, latest_release_url: &str) -> Result<String> {
-    let response = client
-        .get(latest_release_url)
-        .header("User-Agent", "aikit")
-        .send()
-        .await
-        .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?
+    let response = send_get_with_retries(client, latest_release_url, "update request")
+        .await?
         .error_for_status()
         .map_err(|err| AikitError::Provider(format!("update request failed: {err}")))?;
     parse_release_tag_from_url(response.url().as_str())
+}
+
+const UPDATE_REQUEST_ATTEMPTS: usize = 3;
+const UPDATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Transient network failures and server-side errors are retried a few times;
+/// deterministic client errors (4xx) are returned to the caller as-is.
+async fn send_get_with_retries(
+    client: &Client,
+    url: &str,
+    context: &str,
+) -> Result<reqwest::Response> {
+    let mut last_error = AikitError::Provider(format!("{context} failed"));
+    for attempt in 1..=UPDATE_REQUEST_ATTEMPTS {
+        if attempt > 1 {
+            tokio::time::sleep(UPDATE_RETRY_DELAY * (attempt as u32 - 1)).await;
+        }
+        let request = client.get(url).header("User-Agent", "aikit").send().await;
+        match request {
+            Ok(response) => {
+                let status = response.status();
+                if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    last_error = AikitError::Provider(format!(
+                        "{context} failed: server returned {status} (attempt {attempt}/{UPDATE_REQUEST_ATTEMPTS})"
+                    ));
+                    continue;
+                }
+                return Ok(response);
+            }
+            Err(err) => {
+                last_error = AikitError::Provider(format!(
+                    "{context} failed: {err} (attempt {attempt}/{UPDATE_REQUEST_ATTEMPTS})"
+                ));
+            }
+        }
+    }
+    Err(last_error)
 }
 
 fn parse_release_tag_from_url(url: &str) -> Result<String> {
@@ -315,12 +348,8 @@ fn parse_release_tag_from_url(url: &str) -> Result<String> {
 }
 
 async fn download_bytes(client: &Client, url: &str) -> Result<Vec<u8>> {
-    client
-        .get(url)
-        .header("User-Agent", "aikit")
-        .send()
-        .await
-        .map_err(|err| AikitError::Provider(format!("download failed: {err}")))?
+    send_get_with_retries(client, url, "download")
+        .await?
         .error_for_status()
         .map_err(|err| AikitError::Provider(format!("download failed: {err}")))?
         .bytes()
