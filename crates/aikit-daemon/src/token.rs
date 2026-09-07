@@ -75,8 +75,17 @@ mod tests {
         let token = generate_token();
         assert_eq!(token.len(), TOKEN_LEN);
         assert!(validate_token_format(&token));
-        assert!(token.bytes().any(|byte| byte.is_ascii_digit()));
-        assert!(token.bytes().any(|byte| byte.is_ascii_alphabetic()));
+    }
+
+    #[test]
+    fn token_alphabet_covers_digits_letters_and_symbols() {
+        // Deterministic property of the alphabet itself; a single random
+        // token is not guaranteed to contain every character class.
+        assert!(TOKEN_ALPHABET.iter().any(|b| b.is_ascii_digit()));
+        assert!(TOKEN_ALPHABET.iter().any(|b| b.is_ascii_uppercase()));
+        assert!(TOKEN_ALPHABET.iter().any(|b| b.is_ascii_lowercase()));
+        assert!(TOKEN_ALPHABET.iter().any(|b| !b.is_ascii_alphanumeric()));
+        assert_eq!(TOKEN_ALPHABET.len(), 76);
     }
 
     #[test]
