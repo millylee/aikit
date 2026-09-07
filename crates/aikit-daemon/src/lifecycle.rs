@@ -52,6 +52,7 @@ pub fn remove_daemon_info(aikit_dir: &Path) {
 
 pub async fn probe_alive(bind: IpAddr, port: u16) -> bool {
     let client = match reqwest::Client::builder()
+        .no_proxy()
         .timeout(Duration::from_secs(2))
         .build()
     {
@@ -159,7 +160,9 @@ pub async fn start_with_executable_owned(
     let token = crate::token::ensure_token(aikit_dir)?;
 
     let mut child = spawn_serve(executable, bind, port)?;
-    if let Err(err) = wait_for_readiness(&mut child, bind, port, START_READINESS_TIMEOUT).await {
+    if let Err(err) =
+        wait_for_readiness(&mut child, aikit_dir, bind, port, START_READINESS_TIMEOUT).await
+    {
         if read_daemon_info(aikit_dir).is_some_and(|info| info.pid == child.id()) {
             remove_daemon_info(aikit_dir);
         }
@@ -178,6 +181,7 @@ pub async fn start_with_executable_owned(
 
 async fn wait_for_readiness(
     child: &mut Child,
+    aikit_dir: &Path,
     bind: IpAddr,
     port: u16,
     timeout: Duration,
@@ -200,6 +204,14 @@ async fn wait_for_readiness(
                 .await
                 .unwrap_or(false)
             {
+                // The health response may come from an unrelated process
+                // holding the port while our spawn failed to bind; a ready
+                // daemon always records its own pid first.
+                if !read_daemon_info(aikit_dir).is_some_and(|info| info.pid == child.id()) {
+                    return Err(AikitError::Provider(format!(
+                        "port {port} is already served by another process"
+                    )));
+                }
                 return Ok(());
             }
             tokio::time::sleep(Duration::from_millis(100).min(remaining)).await;
@@ -373,6 +385,7 @@ mod update_start_tests {
 
         let result = wait_for_readiness(
             &mut child,
+            directory.path(),
             address.ip(),
             address.port(),
             Duration::from_millis(100),
@@ -386,5 +399,55 @@ mod update_start_tests {
             .expect("startup child must be terminated and reaped");
         assert!(!exit_status.success());
         assert_eq!(child.wait().unwrap(), exit_status);
+    }
+
+    #[tokio::test]
+    async fn readiness_rejects_a_port_served_by_another_process() {
+        let directory = tempfile::tempdir().unwrap();
+        // A live HTTP responder on the port plays the role of an unrelated
+        // process holding it; the spawned child stays alive but never binds.
+        let responder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = responder.local_addr().unwrap();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            if let Ok((mut stream, _)) = responder.accept() {
+                let mut buf = [0u8; 512];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+            }
+        });
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "lifecycle::update_start_tests::sleeping_child"])
+            .env("AIKIT_LIFECYCLE_TEST_CHILD", "1")
+            .current_dir(directory.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        let mut child = command.spawn().unwrap();
+
+        let result = wait_for_readiness(
+            &mut child,
+            directory.path(),
+            address.ip(),
+            address.port(),
+            Duration::from_secs(2),
+        )
+        .await;
+
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("another process"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            child.try_wait().unwrap().is_some(),
+            "the spawned child must be terminated, not reported ready"
+        );
     }
 }

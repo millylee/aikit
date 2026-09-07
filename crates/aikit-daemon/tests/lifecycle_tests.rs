@@ -58,6 +58,55 @@ async fn status_reports_stale_when_probe_fails() {
     );
 }
 
+static PROXY_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct ProxyEnvGuard;
+
+impl ProxyEnvGuard {
+    fn arm(dead_proxy_port: u16) -> Self {
+        std::env::set_var("HTTP_PROXY", format!("http://127.0.0.1:{dead_proxy_port}"));
+        std::env::set_var("HTTPS_PROXY", format!("http://127.0.0.1:{dead_proxy_port}"));
+        Self
+    }
+}
+
+impl Drop for ProxyEnvGuard {
+    fn drop(&mut self) {
+        std::env::remove_var("HTTP_PROXY");
+        std::env::remove_var("HTTPS_PROXY");
+    }
+}
+
+fn spawn_health_endpoint() -> u16 {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        }
+    });
+    port
+}
+
+#[tokio::test]
+async fn probe_alive_connects_directly_ignoring_proxy_environment() {
+    let _lock = PROXY_ENV_LOCK.lock().unwrap();
+    let _proxy_env = ProxyEnvGuard::arm(1);
+    let health_port = spawn_health_endpoint();
+
+    let alive = tokio::time::timeout(
+        Duration::from_secs(5),
+        aikit_daemon::lifecycle::probe_alive("127.0.0.1".parse::<IpAddr>().unwrap(), health_port),
+    )
+    .await
+    .unwrap();
+
+    assert!(alive, "local daemon probes must bypass proxy env vars");
+}
+
 #[tokio::test]
 async fn stop_is_idempotent_without_state() {
     let dir = tempfile::tempdir().unwrap();
