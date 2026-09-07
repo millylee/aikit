@@ -65,7 +65,7 @@ impl ClaudeWriter {
         let object = value.as_object_mut().ok_or_else(|| {
             AikitError::TargetWrite("claude json config root must be an object".into())
         })?;
-        let effective_model = if selection.claude_1m_context {
+        let effective_model = if selection.context_1m {
             with_1m_suffix(&selection.model)
         } else {
             selection.model.clone()
@@ -92,7 +92,7 @@ impl ClaudeWriter {
                 env_object.remove(var);
             }
         }
-        if selection.claude_1m_context {
+        if selection.context_1m {
             env_object.insert(
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW".into(),
                 Value::String("1000000".to_string()),

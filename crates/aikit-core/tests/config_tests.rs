@@ -42,7 +42,7 @@ fn saves_and_loads_config_as_toml() {
         }],
         backup_history: vec![],
         claude_pin_models: true,
-        claude_1m_context: true,
+        context_1m: true,
         bypass_permissions: false,
     };
 
@@ -90,7 +90,7 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         targets: Vec::new(),
         backup_history: vec![],
         claude_pin_models: true,
-        claude_1m_context: true,
+        context_1m: true,
         bypass_permissions: false,
     };
 
@@ -111,7 +111,8 @@ fn default_path_ends_with_aikit_config_toml() {
 
 #[test]
 fn config_without_targets_field_loads_with_defaults() {
-    // Configs written before the targets feature existed must still load.
+    // Configs written before the targets feature existed must still load,
+    // including the legacy claude_1m_context field name.
     let dir = tempdir().unwrap();
     let path = dir.path().join("config.toml");
     std::fs::write(
@@ -126,4 +127,24 @@ fn config_without_targets_field_loads_with_defaults() {
     assert!(!loaded.targets[0].enabled);
     assert_eq!(loaded.targets[1].id, "codex");
     assert!(!loaded.targets[1].enabled);
+}
+
+#[test]
+fn config_reads_legacy_claude_1m_context_field_and_saves_the_new_name() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "providers = []\nclaude_pin_models = true\nclaude_1m_context = false\nbypass_permissions = false\n",
+    )
+    .unwrap();
+
+    let loaded = AikitConfig::load_from(&path).unwrap();
+    assert!(!loaded.context_1m);
+    assert!(loaded.claude_pin_models);
+
+    loaded.save_to(&path).unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("context_1m"));
+    assert!(!saved.contains("claude_1m_context"));
 }

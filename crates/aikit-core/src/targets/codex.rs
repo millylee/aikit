@@ -69,6 +69,20 @@ impl CodexWriter {
         root.insert("model".into(), toml::Value::String(selection.model.clone()));
         root.insert("model_provider".into(), toml::Value::String("aikit".into()));
 
+        if selection.context_1m {
+            root.insert(
+                "model_context_window".into(),
+                toml::Value::Integer(1_000_000),
+            );
+            root.insert(
+                "model_auto_compact_token_limit".into(),
+                toml::Value::Integer(900_000),
+            );
+        } else {
+            root.remove("model_context_window");
+            root.remove("model_auto_compact_token_limit");
+        }
+
         if selection.bypass_permissions {
             root.insert(
                 "approval_policy".into(),

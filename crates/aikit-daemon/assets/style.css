@@ -61,6 +61,7 @@ section {
 .model-list { flex: 1; min-height: 80px; overflow-y: auto; }
 #side { width: 260px; flex-shrink: 0; overflow-y: auto; }
 h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+#targets-body h3 { font-size: 12px; margin: 10px 0 6px; color: var(--muted); font-weight: 600; }
 ul.plain { list-style: none; margin: 0; padding: 0; }
 ul.plain li { padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 ul.plain li:hover { background: var(--bg); }

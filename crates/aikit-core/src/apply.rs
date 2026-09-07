@@ -55,7 +55,7 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         api_key: api_key.value.clone(),
         model: active.model_id.clone(),
         claude_pin_models: config.claude_pin_models,
-        claude_1m_context: config.claude_1m_context,
+        context_1m: config.context_1m,
         bypass_permissions: config.bypass_permissions,
     })
 }

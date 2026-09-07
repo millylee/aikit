@@ -16,7 +16,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
         &backup_root,
@@ -63,7 +63,7 @@ fn codex_writer_creates_missing_config() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -104,7 +104,7 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -126,7 +126,7 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -149,7 +149,7 @@ fn codex_writer_refuses_invalid_existing_toml() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -169,7 +169,7 @@ fn codex_writer_serializes_special_characters_in_toml() {
         api_key: "sk\\key\"quoted".into(),
         model: "model\\with\"quotes".into(),
         claude_pin_models: false,
-        claude_1m_context: false,
+        context_1m: false,
         bypass_permissions: false,
     };
 
@@ -213,6 +213,76 @@ fn codex_writer_serializes_special_characters_in_toml() {
 }
 
 #[test]
+fn codex_writer_enables_1m_context_with_window_settings() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: true,
+            bypass_permissions: false,
+        },
+        &dir.path().join("aikit"),
+    )
+    .unwrap();
+
+    let updated = std::fs::read_to_string(&path).unwrap();
+    let parsed: toml::Value = toml::from_str(&updated).unwrap();
+    assert_eq!(
+        parsed
+            .get("model_context_window")
+            .and_then(toml::Value::as_integer),
+        Some(1_000_000)
+    );
+    assert_eq!(
+        parsed
+            .get("model_auto_compact_token_limit")
+            .and_then(toml::Value::as_integer),
+        Some(900_000)
+    );
+}
+
+#[test]
+fn codex_writer_disables_1m_context_by_removing_window_settings() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        r#"
+model = "old"
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+"#,
+    )
+    .unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+        },
+        &dir.path().join("aikit"),
+    )
+    .unwrap();
+
+    let updated = std::fs::read_to_string(&path).unwrap();
+    let parsed: toml::Value = toml::from_str(&updated).unwrap();
+    assert!(parsed.get("model_context_window").is_none());
+    assert!(parsed.get("model_auto_compact_token_limit").is_none());
+}
+
+#[test]
 fn codex_writer_preserves_unrelated_existing_toml_keys() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("config.toml");
@@ -239,7 +309,7 @@ model = "keep-me"
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
         &dir.path().join("aikit"),
@@ -300,7 +370,7 @@ model_providers = "not-a-table"
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -328,7 +398,7 @@ aikit = "not-a-table"
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -351,7 +421,7 @@ fn claude_writer_creates_minimal_json_config() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -377,7 +447,7 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -404,7 +474,7 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
         &backup_root,
@@ -436,7 +506,7 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     );
@@ -459,7 +529,7 @@ fn claude_writer_pins_all_model_env_vars_when_enabled() {
             api_key: "sk-new".into(),
             model: "glm-5.2".into(),
             claude_pin_models: true,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
         &backup_root,
@@ -500,7 +570,7 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
             api_key: "sk-new".into(),
             model: "glm-5.2".into(),
             claude_pin_models: true,
-            claude_1m_context: true,
+            context_1m: true,
             bypass_permissions: false,
         },
     )
@@ -538,7 +608,7 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
             api_key: "sk-new".into(),
             model: "glm-5.2[1m]".into(),
             claude_pin_models: false,
-            claude_1m_context: true,
+            context_1m: true,
             bypass_permissions: false,
         },
     )
@@ -576,7 +646,7 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             api_key: "sk-new".into(),
             model: "glm-5.2".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -618,7 +688,7 @@ fn claude_writer_sets_bypass_permissions_when_enabled() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: true,
         },
     )
@@ -648,7 +718,7 @@ fn claude_writer_removes_bypass_permissions_when_disabled() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -673,7 +743,7 @@ fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
             api_key: "sk-new".into(),
             model: "claude-model".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -697,7 +767,7 @@ fn codex_writer_sets_bypass_permissions_when_enabled() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: true,
         },
     )
@@ -731,7 +801,7 @@ fn codex_writer_removes_bypass_permissions_when_disabled() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )
@@ -755,7 +825,7 @@ fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
             api_key: "sk-new".into(),
             model: "model-new".into(),
             claude_pin_models: false,
-            claude_1m_context: false,
+            context_1m: false,
             bypass_permissions: false,
         },
     )

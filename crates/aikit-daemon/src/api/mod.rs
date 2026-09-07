@@ -140,7 +140,7 @@ pub struct ConfigResponse {
     pub active_selection: Option<ActiveSelection>,
     pub targets: Vec<TargetConfig>,
     pub claude_pin_models: bool,
-    pub claude_1m_context: bool,
+    pub context_1m: bool,
     pub bypass_permissions: bool,
 }
 
@@ -155,7 +155,7 @@ impl ConfigResponse {
             active_selection: config.active_selection.clone(),
             targets: config.targets.clone(),
             claude_pin_models: config.claude_pin_models,
-            claude_1m_context: config.claude_1m_context,
+            context_1m: config.context_1m,
             bypass_permissions: config.bypass_permissions,
         }
     }
