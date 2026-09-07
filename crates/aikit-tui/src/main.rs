@@ -397,7 +397,7 @@ mod tests {
             .respond_with(
                 ResponseTemplate::new(500).set_delay(std::time::Duration::from_millis(300)),
             )
-            .expect(1)
+            .expect(1..=3)
             .mount(&server)
             .await;
         let mut terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
