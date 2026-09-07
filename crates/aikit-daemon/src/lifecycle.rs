@@ -97,6 +97,14 @@ pub async fn stop(aikit_dir: &Path) -> Result<StopOutcome> {
     )))
 }
 
+pub fn stop_owned_child(aikit_dir: &Path, child: &mut Child) -> Result<()> {
+    kill_and_reap_child(child)?;
+    if read_daemon_info(aikit_dir).is_some_and(|info| info.pid == child.id()) {
+        remove_daemon_info(aikit_dir);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StartOutcome {
     Started {
@@ -121,8 +129,28 @@ pub async fn ensure_startable(aikit_dir: &Path) -> Result<Option<DaemonInfo>> {
 }
 
 pub async fn start(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOutcome> {
+    let executable = std::env::current_exe().map_err(AikitError::Io)?;
+    start_with_executable(aikit_dir, bind, port, &executable).await
+}
+
+pub async fn start_with_executable(
+    aikit_dir: &Path,
+    bind: IpAddr,
+    port: u16,
+    executable: &Path,
+) -> Result<StartOutcome> {
+    let (outcome, _) = start_with_executable_owned(aikit_dir, bind, port, executable).await?;
+    Ok(outcome)
+}
+
+pub async fn start_with_executable_owned(
+    aikit_dir: &Path,
+    bind: IpAddr,
+    port: u16,
+    executable: &Path,
+) -> Result<(StartOutcome, Option<Child>)> {
     if let Some(info) = ensure_startable(aikit_dir).await? {
-        return Ok(StartOutcome::AlreadyRunning { info });
+        return Ok((StartOutcome::AlreadyRunning { info }, None));
     }
 
     // Generate the token up front so the CLI can show it (especially on the
@@ -130,29 +158,76 @@ pub async fn start(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOut
     let token_created = crate::token::read_valid_token(aikit_dir).is_none();
     let token = crate::token::ensure_token(aikit_dir)?;
 
-    let mut child = spawn_serve(bind, port)?;
-    let deadline = Instant::now() + START_READINESS_TIMEOUT;
-    loop {
-        if let Ok(Some(status)) = child.try_wait() {
-            return Err(AikitError::Provider(format!(
-                "daemon process exited before becoming ready (code {status}); 端口 {port} 可能被占用"
-            )));
+    let mut child = spawn_serve(executable, bind, port)?;
+    if let Err(err) = wait_for_readiness(&mut child, bind, port, START_READINESS_TIMEOUT).await {
+        if read_daemon_info(aikit_dir).is_some_and(|info| info.pid == child.id()) {
+            remove_daemon_info(aikit_dir);
         }
-        if probe_alive(bind, port).await {
-            return Ok(StartOutcome::Started {
-                pid: child.id(),
-                url: format_http_url(bind, port),
-                token,
-                token_created,
-            });
-        }
-        if Instant::now() >= deadline {
-            return Err(AikitError::Provider(format!(
-                "daemon did not become ready on port {port} within timeout"
-            )));
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        return Err(err);
     }
+    Ok((
+        StartOutcome::Started {
+            pid: child.id(),
+            url: format_http_url(bind, port),
+            token,
+            token_created,
+        },
+        Some(child),
+    ))
+}
+
+async fn wait_for_readiness(
+    child: &mut Child,
+    bind: IpAddr,
+    port: u16,
+    timeout: Duration,
+) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+    let result = async {
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Err(AikitError::Provider(format!(
+                    "daemon process exited before becoming ready (code {status}); 端口 {port} 可能被占用"
+                )));
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(AikitError::Provider(format!(
+                    "daemon did not become ready on port {port} within timeout"
+                )));
+            }
+            if tokio::time::timeout(remaining, probe_alive(bind, port))
+                .await
+                .unwrap_or(false)
+            {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(100).min(remaining)).await;
+        }
+    }
+    .await;
+    if let Err(err) = result {
+        kill_and_reap_child(child)
+            .map_err(|cleanup_error| AikitError::Provider(format!("{err}; {cleanup_error}")))?;
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn kill_and_reap_child(child: &mut Child) -> Result<()> {
+    if child.try_wait().ok().flatten().is_none() {
+        if let Err(kill_error) = child.kill() {
+            if child.try_wait().ok().flatten().is_none() {
+                return Err(AikitError::Provider(format!(
+                    "failed to terminate child: {kill_error}"
+                )));
+            }
+        }
+        child.wait().map_err(|wait_error| {
+            AikitError::Provider(format!("failed to reap child: {wait_error}"))
+        })?;
+    }
+    Ok(())
 }
 
 pub async fn restart(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartOutcome> {
@@ -160,9 +235,8 @@ pub async fn restart(aikit_dir: &Path, bind: IpAddr, port: u16) -> Result<StartO
     start(aikit_dir, bind, port).await
 }
 
-fn spawn_serve(bind: IpAddr, port: u16) -> Result<Child> {
-    let exe = std::env::current_exe().map_err(AikitError::Io)?;
-    let mut command = Command::new(exe);
+fn spawn_serve(executable: &Path, bind: IpAddr, port: u16) -> Result<Child> {
+    let mut command = Command::new(executable);
     command
         .args([
             "daemon",
@@ -264,4 +338,53 @@ fn set_owner_only(path: &Path) -> Result<()> {
 #[cfg(not(unix))]
 fn set_owner_only(_path: &Path) -> Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod update_start_tests {
+    use super::*;
+
+    #[test]
+    fn sleeping_child() {
+        if std::env::var_os("AIKIT_LIFECYCLE_TEST_CHILD").is_some() {
+            std::thread::sleep(Duration::from_secs(60));
+        }
+    }
+
+    #[tokio::test]
+    async fn readiness_timeout_terminates_and_reaps_its_child() {
+        let directory = tempfile::tempdir().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "lifecycle::update_start_tests::sleeping_child"])
+            .env("AIKIT_LIFECYCLE_TEST_CHILD", "1")
+            .current_dir(directory.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        let mut child = command.spawn().unwrap();
+
+        let result = wait_for_readiness(
+            &mut child,
+            address.ip(),
+            address.port(),
+            Duration::from_millis(100),
+        )
+        .await;
+
+        assert!(result.unwrap_err().to_string().contains("within timeout"));
+        let exit_status = child
+            .try_wait()
+            .unwrap()
+            .expect("startup child must be terminated and reaped");
+        assert!(!exit_status.success());
+        assert_eq!(child.wait().unwrap(), exit_status);
+    }
 }
