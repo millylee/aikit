@@ -17,6 +17,7 @@ pub struct AikitConfig {
     pub import_prompt: ImportPromptState,
     #[serde(default, skip_serializing)]
     pub update_prompt: UpdatePromptState,
+    #[serde(default = "default_targets")]
     pub targets: Vec<TargetConfig>,
     #[serde(default = "default_true")]
     pub claude_pin_models: bool,
@@ -109,6 +110,21 @@ fn default_true() -> bool {
     true
 }
 
+fn default_targets() -> Vec<TargetConfig> {
+    vec![
+        TargetConfig {
+            id: "claude".into(),
+            enabled: false,
+            config_path: None,
+        },
+        TargetConfig {
+            id: "codex".into(),
+            enabled: false,
+            config_path: None,
+        },
+    ]
+}
+
 impl Default for AikitConfig {
     fn default() -> Self {
         Self {
@@ -116,18 +132,7 @@ impl Default for AikitConfig {
             active_selection: None,
             import_prompt: ImportPromptState::default(),
             update_prompt: UpdatePromptState::default(),
-            targets: vec![
-                TargetConfig {
-                    id: "claude".into(),
-                    enabled: false,
-                    config_path: None,
-                },
-                TargetConfig {
-                    id: "codex".into(),
-                    enabled: false,
-                    config_path: None,
-                },
-            ],
+            targets: default_targets(),
             claude_pin_models: true,
             claude_1m_context: true,
             bypass_permissions: false,

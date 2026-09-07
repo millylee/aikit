@@ -108,3 +108,22 @@ fn default_path_ends_with_aikit_config_toml() {
     let path = default_config_path().unwrap();
     assert!(path.ends_with(".aikit/config.toml") || path.ends_with(".aikit\\config.toml"));
 }
+
+#[test]
+fn config_without_targets_field_loads_with_defaults() {
+    // Configs written before the targets feature existed must still load.
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "providers = []\nclaude_pin_models = true\nclaude_1m_context = true\nbypass_permissions = false\n",
+    )
+    .unwrap();
+
+    let loaded = AikitConfig::load_from(&path).unwrap();
+    assert_eq!(loaded.targets.len(), 2);
+    assert_eq!(loaded.targets[0].id, "claude");
+    assert!(!loaded.targets[0].enabled);
+    assert_eq!(loaded.targets[1].id, "codex");
+    assert!(!loaded.targets[1].enabled);
+}
