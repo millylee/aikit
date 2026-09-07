@@ -13,7 +13,7 @@ pub struct TargetSelection {
     pub api_key: String,
     pub model: String,
     pub claude_pin_models: bool,
-    pub claude_1m_context: bool,
+    pub context_1m: bool,
     pub bypass_permissions: bool,
 }
 

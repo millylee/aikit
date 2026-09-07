@@ -309,6 +309,9 @@ fn targets_text(state: &AppState) -> String {
         ));
     }
 
+    lines.push(String::new());
+    lines.push("Options".to_string());
+
     let target_count = state.config.targets.len();
     let pin_cursor = if state.target_index == target_count {
         ">"
@@ -327,12 +330,12 @@ fn targets_text(state: &AppState) -> String {
     } else {
         " "
     };
-    let ctx_enabled = if state.config.claude_1m_context {
+    let ctx_enabled = if state.config.context_1m {
         "[x]"
     } else {
         "[ ]"
     };
-    lines.push(format!("{ctx_cursor} {ctx_enabled} Claude 1M context"));
+    lines.push(format!("{ctx_cursor} {ctx_enabled} 1M context"));
 
     let bypass_cursor = if state.target_index == target_count + 2 {
         ">"
@@ -821,6 +824,38 @@ mod tests {
         assert!(text.contains("  [ ] Codex CLI"));
         assert!(!text.contains("default path"));
         assert!(!text.contains("not applied"));
+    }
+
+    #[test]
+    fn targets_pane_separates_options_with_a_group_header() {
+        let state = AppState::from_config(PathBuf::from("config.toml"), sample_config());
+
+        let text = targets_text(&state);
+
+        assert_eq!(
+            text.lines()
+                .filter(|line| line.trim().eq("Options"))
+                .count(),
+            1,
+            "expected one Options group header in:\n{text}"
+        );
+        assert!(text.contains("1M context"));
+        assert!(!text.contains("Claude 1M context"));
+        // The header sits between the targets and the option rows.
+        let header_line = text
+            .lines()
+            .position(|line| line.trim() == "Options")
+            .unwrap();
+        let target_line = text
+            .lines()
+            .position(|line| line.contains("Codex CLI"))
+            .unwrap();
+        let option_line = text
+            .lines()
+            .position(|line| line.contains("1M context"))
+            .unwrap();
+        assert!(target_line < header_line);
+        assert!(header_line < option_line);
     }
 
     #[test]

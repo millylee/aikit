@@ -20,6 +20,7 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = value; }
   appendChild(child) { this.children.push(child); }
   addEventListener() {}
+  tagName = "div";
 }
 
 function response(body, status = 200) {
@@ -33,7 +34,7 @@ async function mountTargets(overrides = {}) {
     active_selection: null,
     targets: [{ id: "claude", enabled: false }, { id: "codex", enabled: true }],
     claude_pin_models: false,
-    claude_1m_context: true,
+    context_1m: true,
     bypass_permissions: false,
     ...overrides
   };
@@ -44,7 +45,11 @@ async function mountTargets(overrides = {}) {
       if (!nodes.has(id)) nodes.set(id, new Element());
       return nodes.get(id);
     },
-    createElement() { return new Element(); }
+    createElement(tag) {
+      const element = new Element();
+      element.tagName = tag;
+      return element;
+    }
   };
 
   runInNewContext(appSource, {
@@ -66,16 +71,24 @@ async function mountTargets(overrides = {}) {
     config,
     requests,
     checkbox(label) {
-      const row = nodes.get("targets-body").children.find((node) => node.children[1].textContent === label);
+      const row = nodes.get("targets-body").children.find((node) => node.children[1] && node.children[1].textContent === label);
       assert.ok(row, `Checkbox not found: ${label}`);
       return row.children[0];
+    },
+    hasGroupHeader(text) {
+      return nodes.get("targets-body").children.some((node) => node.tagName === "h3" && node.textContent === text);
     }
   };
 }
 
+test("targets render an options group header after the target checkboxes", async () => {
+  const page = await mountTargets();
+  assert.ok(page.hasGroupHeader("选项"), "expected an 选项 group header in targets-body");
+});
+
 for (const [flag, label] of [
   ["claude_pin_models", "固定所有 Claude 模型"],
-  ["claude_1m_context", "Claude 1M 上下文"],
+  ["context_1m", "1M 上下文"],
   ["bypass_permissions", "Bypass 权限（危险）"]
 ]) {
   for (const initial of [false, true]) {

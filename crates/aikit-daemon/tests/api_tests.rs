@@ -409,7 +409,7 @@ async fn targets_update_toggles_flags() {
                 serde_json::json!({
                     "targets": [{ "id": "claude", "enabled": enabled }],
                     "claude_pin_models": enabled,
-                    "claude_1m_context": enabled,
+                    "context_1m": enabled,
                     "bypass_permissions": enabled
                 }),
             ))
@@ -425,12 +425,12 @@ async fn targets_update_toggles_flags() {
             .unwrap();
         assert_eq!(claude["enabled"], enabled);
         assert_eq!(json["claude_pin_models"], enabled);
-        assert_eq!(json["claude_1m_context"], enabled);
+        assert_eq!(json["context_1m"], enabled);
         assert_eq!(json["bypass_permissions"], enabled);
 
         let saved = AikitConfig::load_from(&config_path).unwrap();
         assert_eq!(saved.claude_pin_models, enabled);
-        assert_eq!(saved.claude_1m_context, enabled);
+        assert_eq!(saved.context_1m, enabled);
         assert_eq!(saved.bypass_permissions, enabled);
     }
 }

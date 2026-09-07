@@ -1638,7 +1638,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
         }],
         backup_history: Vec::new(),
         claude_pin_models: true,
-        claude_1m_context: true,
+        context_1m: true,
         bypass_permissions: false,
     }
 }
@@ -1654,13 +1654,13 @@ fn active_target_selection_propagates_claude_options() {
     let mut config = sample_config_with_manual_model();
     let selection = active_target_selection(&config).unwrap();
     assert!(selection.claude_pin_models);
-    assert!(selection.claude_1m_context);
+    assert!(selection.context_1m);
 
     config.claude_pin_models = false;
-    config.claude_1m_context = false;
+    config.context_1m = false;
     let selection = active_target_selection(&config).unwrap();
     assert!(!selection.claude_pin_models);
-    assert!(!selection.claude_1m_context);
+    assert!(!selection.context_1m);
 }
 
 #[test]
@@ -1682,7 +1682,7 @@ fn space_toggles_claude_pin_models_option() {
 }
 
 #[test]
-fn space_toggles_claude_1m_context_option() {
+fn space_toggles_context_1m_option() {
     let mut state = AppState::from_config(
         std::path::PathBuf::from("config.toml"),
         sample_config(std::path::PathBuf::from("codex.toml")),
@@ -1695,7 +1695,7 @@ fn space_toggles_claude_1m_context_option() {
         KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
     );
 
-    assert!(!state.config.claude_1m_context);
+    assert!(!state.config.context_1m);
     assert!(state.status.contains("Claude 1M context"));
 }
 

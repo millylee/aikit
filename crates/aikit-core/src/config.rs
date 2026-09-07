@@ -21,8 +21,8 @@ pub struct AikitConfig {
     pub targets: Vec<TargetConfig>,
     #[serde(default = "default_true")]
     pub claude_pin_models: bool,
-    #[serde(default = "default_true")]
-    pub claude_1m_context: bool,
+    #[serde(default = "default_true", alias = "claude_1m_context")]
+    pub context_1m: bool,
     #[serde(default)]
     pub bypass_permissions: bool,
     #[serde(default, skip_serializing)]
@@ -134,7 +134,7 @@ impl Default for AikitConfig {
             update_prompt: UpdatePromptState::default(),
             targets: default_targets(),
             claude_pin_models: true,
-            claude_1m_context: true,
+            context_1m: true,
             bypass_permissions: false,
             backup_history: Vec::new(),
         }

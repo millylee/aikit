@@ -77,7 +77,7 @@
         // A target toggle raced this refresh; keep the toggled fields.
         config.targets = state.config.targets;
         config.claude_pin_models = state.config.claude_pin_models;
-        config.claude_1m_context = state.config.claude_1m_context;
+        config.context_1m = state.config.context_1m;
         config.bypass_permissions = state.config.bypass_permissions;
       }
       state.config = config;
@@ -271,8 +271,9 @@
       check.onchange = function () { toggleTargets({ targets: [{ id: target.id, enabled: check.checked }] }); };
       body.appendChild(el("label", { "class": "check" }, [check, el("span", { text: targetDisplayName(target.id) })]));
     });
+    body.appendChild(el("h3", { text: "选项" }));
     [["claude_pin_models", "固定所有 Claude 模型", config.claude_pin_models],
-     ["claude_1m_context", "Claude 1M 上下文", config.claude_1m_context],
+     ["context_1m", "1M 上下文", config.context_1m],
      ["bypass_permissions", "Bypass 权限（危险）", config.bypass_permissions]].forEach(function (item) {
       var check = el("input", { type: "checkbox" });
       check.checked = item[2];
@@ -301,7 +302,7 @@
         if (id !== targetsRequestId) return;
         state.config.targets = config.targets;
         state.config.claude_pin_models = config.claude_pin_models;
-        state.config.claude_1m_context = config.claude_1m_context;
+        state.config.context_1m = config.context_1m;
         state.config.bypass_permissions = config.bypass_permissions;
         renderTargets();
         setStatus("已更新", "ok");
@@ -318,7 +319,7 @@
       var target = state.config.targets.find(function (t) { return t.id === update.id; });
       if (target) target.enabled = update.enabled;
     });
-    ["claude_pin_models", "claude_1m_context", "bypass_permissions"].forEach(function (key) {
+    ["claude_pin_models", "context_1m", "bypass_permissions"].forEach(function (key) {
       if (key in payload) state.config[key] = payload[key];
     });
   }
@@ -327,7 +328,7 @@
     api("GET", "/api/config").then(function (config) {
       state.config.targets = config.targets;
       state.config.claude_pin_models = config.claude_pin_models;
-      state.config.claude_1m_context = config.claude_1m_context;
+      state.config.context_1m = config.context_1m;
       state.config.bypass_permissions = config.bypass_permissions;
       renderTargets();
     }).catch(function () {});

@@ -1109,7 +1109,7 @@ impl AppState {
                 } else if self.target_index == target_count {
                     self.toggle_claude_pin_models();
                 } else if self.target_index == target_count + 1 {
-                    self.toggle_claude_1m_context();
+                    self.toggle_context_1m();
                 } else {
                     self.toggle_bypass_permissions();
                 }
@@ -1159,9 +1159,9 @@ impl AppState {
         self.set_status(format!("Pin all Claude models {status}"));
     }
 
-    pub fn toggle_claude_1m_context(&mut self) {
-        self.config.claude_1m_context = !self.config.claude_1m_context;
-        let status = if self.config.claude_1m_context {
+    pub fn toggle_context_1m(&mut self) {
+        self.config.context_1m = !self.config.context_1m;
+        let status = if self.config.context_1m {
             "enabled"
         } else {
             "disabled"

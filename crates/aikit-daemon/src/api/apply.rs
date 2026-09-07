@@ -41,7 +41,7 @@ pub struct TargetEnabledPayload {
 pub struct TargetsPayload {
     pub targets: Option<Vec<TargetEnabledPayload>>,
     pub claude_pin_models: Option<bool>,
-    pub claude_1m_context: Option<bool>,
+    pub context_1m: Option<bool>,
     pub bypass_permissions: Option<bool>,
 }
 
@@ -52,7 +52,7 @@ pub async fn set_targets(
     let updates = payload.targets.unwrap_or_default();
     if updates.is_empty()
         && payload.claude_pin_models.is_none()
-        && payload.claude_1m_context.is_none()
+        && payload.context_1m.is_none()
         && payload.bypass_permissions.is_none()
     {
         return Err(ApiError::BadRequest("no target updates provided".into()));
@@ -79,8 +79,8 @@ pub async fn set_targets(
         if let Some(value) = payload.claude_pin_models {
             config.claude_pin_models = value;
         }
-        if let Some(value) = payload.claude_1m_context {
-            config.claude_1m_context = value;
+        if let Some(value) = payload.context_1m {
+            config.context_1m = value;
         }
         if let Some(value) = payload.bypass_permissions {
             config.bypass_permissions = value;
