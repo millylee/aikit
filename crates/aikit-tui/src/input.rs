@@ -258,7 +258,13 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> AppAction {
             state.open_shortcuts_modal();
             AppAction::None
         }
-        (KeyCode::Char('u'), _) => AppAction::CheckUpdates,
+        (KeyCode::Char('u'), _) => {
+            if state.begin_update_check() {
+                AppAction::CheckUpdates
+            } else {
+                AppAction::None
+            }
+        }
         (KeyCode::Tab, _) => {
             state.focus_next_pane();
             AppAction::None

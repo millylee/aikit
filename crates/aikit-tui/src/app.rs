@@ -15,7 +15,7 @@ use aikit_core::{
     },
     provider::OpenAiCompatibleClient,
     targets::{claude::ClaudeWriter, codex::CodexWriter, TargetWriter},
-    updater::{self, StageUpdateOutcome, UpdateCheckOutcome},
+    updater::{self, StageUpdateOutcome},
     AikitError, Result,
 };
 
@@ -30,6 +30,7 @@ pub enum FocusedPane {
 pub struct AppState {
     pub focused_pane: FocusedPane,
     pub status: String,
+    pub update_in_progress: bool,
     pub config_path: std::path::PathBuf,
     pub config: AikitConfig,
     pub provider_index: usize,
@@ -148,6 +149,7 @@ impl Default for AppState {
         Self {
             focused_pane: FocusedPane::Providers,
             status: "Ready".into(),
+            update_in_progress: false,
             config_path: default_config_path().unwrap_or_else(|_| "aikit-config.toml".into()),
             config: AikitConfig::default(),
             provider_index: 0,
@@ -1198,12 +1200,34 @@ impl AppState {
         Ok(outcome)
     }
 
-    pub async fn check_updates(
-        &self,
-        client: &reqwest::Client,
-        latest_release_url: &str,
-    ) -> Result<UpdateCheckOutcome> {
-        updater::check_for_updates(client, latest_release_url).await
+    pub fn begin_update_check(&mut self) -> bool {
+        if self.update_in_progress {
+            return false;
+        }
+        self.update_in_progress = true;
+        self.set_status("正在检查更新…");
+        true
+    }
+
+    pub fn mark_update_downloading(&mut self, version: &str) {
+        self.set_status(format!("正在下载更新 v{version}…"));
+    }
+
+    pub fn finish_update_check(&mut self, outcome: Result<StageUpdateOutcome>) -> Result<()> {
+        self.update_in_progress = false;
+        let result = match outcome {
+            Ok(StageUpdateOutcome::NoUpdate) => {
+                self.set_status(format!(
+                    "Already up to date: v{}",
+                    env!("CARGO_PKG_VERSION")
+                ));
+                Ok(())
+            }
+            Ok(outcome) => self.apply_stage_update_outcome(outcome),
+            Err(error) => Err(error),
+        };
+        self.record_update_check()?;
+        result
     }
 
     pub fn should_stage_background_update(&mut self) -> bool {
@@ -1230,19 +1254,6 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn stage_update_in_background(
-        &mut self,
-        client: &reqwest::Client,
-        latest_release_url: &str,
-    ) -> Result<()> {
-        let aikit_dir = aikit_dir_for_config(&self.config_path);
-        let skipped = self.config.update_prompt.skipped_version.as_deref();
-        let outcome =
-            updater::stage_update_if_available(client, latest_release_url, &aikit_dir, skipped)
-                .await?;
-        self.apply_stage_update_outcome(outcome)
-    }
-
     pub fn apply_stage_update_outcome(&mut self, outcome: StageUpdateOutcome) -> Result<()> {
         match outcome {
             StageUpdateOutcome::NoUpdate => Ok(()),
@@ -1260,50 +1271,12 @@ impl AppState {
         }
     }
 
-    pub fn clear_pending_update_state(&mut self) -> Result<()> {
-        let aikit_dir = aikit_dir_for_config(&self.config_path);
-        updater::clear_pending_update(&aikit_dir)?;
+    pub fn clear_pending_update_version(&mut self) -> Result<()> {
         let mut next_config = self.config.clone();
         next_config.update_prompt.pending_version = None;
         self.persist_state_if_file_backed_config(&next_config)?;
         self.config = next_config;
         Ok(())
-    }
-
-    pub fn apply_pending_update_on_startup(&mut self) -> Result<Option<String>> {
-        let aikit_dir = aikit_dir_for_config(&self.config_path);
-        let pending_version = self.config.update_prompt.pending_version.as_deref();
-        let installed = updater::apply_pending_update_at_startup(&aikit_dir, pending_version)?;
-        if installed.is_some() {
-            self.clear_pending_update_state()?;
-        }
-        Ok(installed)
-    }
-
-    pub async fn check_and_stage_updates(
-        &mut self,
-        client: &reqwest::Client,
-        latest_release_url: &str,
-    ) -> Result<()> {
-        let result = async {
-            let check = self.check_updates(client, latest_release_url).await?;
-            if !check.update_available {
-                self.set_status(check.message);
-                return Ok(());
-            }
-            if self.config.update_prompt.skipped_version.as_deref()
-                == Some(check.latest_version.as_str())
-            {
-                self.set_status(format!("Skipped update v{}", check.latest_version));
-                return Ok(());
-            }
-            self.set_status("Downloading update...");
-            self.stage_update_in_background(client, latest_release_url)
-                .await
-        }
-        .await;
-        self.record_update_check()?;
-        result
     }
 
     pub fn apply_active_selection(&mut self) -> Result<AppCommandOutcome> {

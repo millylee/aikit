@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::copy,
+    io::{copy, Write},
     path::{Path, PathBuf},
 };
 
@@ -13,6 +13,12 @@ use zip::ZipArchive;
 
 use crate::{AikitError, Result};
 
+mod install;
+pub use install::{
+    cleanup_previous_binary, install_binary, install_binary_with_backup,
+    prepare_binary_installation, BinaryInstallation, PreparedBinaryInstallation,
+};
+
 pub const UPDATE_CHECK_COOLDOWN: Duration = Duration::hours(24);
 
 pub const LATEST_RELEASE_URL: &str = "https://github.com/millylee/aikit/releases/latest";
@@ -23,12 +29,6 @@ pub struct UpdateCheckOutcome {
     pub latest_version: String,
     pub update_available: bool,
     pub message: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UpdateApplyOutcome {
-    pub message: String,
-    pub quit_after: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +111,11 @@ pub async fn check_for_updates(
     latest_release_url: &str,
 ) -> Result<UpdateCheckOutcome> {
     let tag_name = fetch_latest_release_tag(client, latest_release_url).await?;
-    let latest_version = normalize_release_tag(&tag_name);
+    update_check_outcome(&tag_name)
+}
+
+fn update_check_outcome(tag_name: &str) -> Result<UpdateCheckOutcome> {
+    let latest_version = normalize_release_tag(tag_name);
     if latest_version.is_empty() {
         return Err(AikitError::Provider(
             "latest release does not include a tag_name".into(),
@@ -139,6 +143,10 @@ pub async fn fetch_release_assets(
     latest_release_url: &str,
 ) -> Result<ReleaseAssets> {
     let tag_name = fetch_latest_release_tag(client, latest_release_url).await?;
+    release_assets_for_tag(latest_release_url, tag_name)
+}
+
+fn release_assets_for_tag(latest_release_url: &str, tag_name: String) -> Result<ReleaseAssets> {
     let archive_name = release_archive_name()?;
     let checksum_name = format!("{archive_name}.sha256");
 
@@ -159,6 +167,14 @@ pub async fn fetch_release_assets(
 
 pub async fn download_and_stage(client: &Client, latest_release_url: &str) -> Result<PathBuf> {
     let assets = fetch_release_assets(client, latest_release_url).await?;
+    let staged = download_and_stage_assets(client, &assets).await?;
+    Ok(staged.keep().join(binary_file_name()))
+}
+
+async fn download_and_stage_assets(
+    client: &Client,
+    assets: &ReleaseAssets,
+) -> Result<tempfile::TempDir> {
     let archive_bytes = download_bytes(client, &assets.archive_url).await?;
     let checksum_bytes = download_bytes(client, &assets.checksum_url).await?;
     let checksum_text = String::from_utf8(checksum_bytes)
@@ -168,12 +184,30 @@ pub async fn download_and_stage(client: &Client, latest_release_url: &str) -> Re
     extract_binary_from_archive(&archive_bytes, &assets.archive_name)
 }
 
+pub fn pending_update_dir(aikit_dir: &Path) -> PathBuf {
+    aikit_dir.join("pending-update")
+}
+
 pub fn pending_update_path(aikit_dir: &Path) -> PathBuf {
-    aikit_dir.join("pending-update").join(binary_file_name())
+    pending_update_dir(aikit_dir).join(binary_file_name())
+}
+
+pub fn pending_update_version(aikit_dir: &Path) -> Result<Option<String>> {
+    if !pending_update_path(aikit_dir).is_file() {
+        return Ok(None);
+    }
+
+    let version = match fs::read_to_string(pending_update_dir(aikit_dir).join("version")) {
+        Ok(version) => version,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(AikitError::Io(err)),
+    };
+    let version = version.trim();
+    Ok((!version.is_empty()).then(|| version.to_string()))
 }
 
 pub fn clear_pending_update(aikit_dir: &Path) -> Result<()> {
-    let dir = aikit_dir.join("pending-update");
+    let dir = pending_update_dir(aikit_dir);
     if dir.exists() {
         fs::remove_dir_all(&dir)?;
     }
@@ -193,7 +227,25 @@ pub async fn stage_update_if_available(
     aikit_dir: &Path,
     skipped_version: Option<&str>,
 ) -> Result<StageUpdateOutcome> {
-    let outcome = check_for_updates(client, latest_release_url).await?;
+    stage_update_with_progress(
+        client,
+        latest_release_url,
+        aikit_dir,
+        skipped_version,
+        |_| {},
+    )
+    .await
+}
+
+pub async fn stage_update_with_progress(
+    client: &Client,
+    latest_release_url: &str,
+    aikit_dir: &Path,
+    skipped_version: Option<&str>,
+    mut on_download: impl FnMut(&str),
+) -> Result<StageUpdateOutcome> {
+    let tag_name = fetch_latest_release_tag(client, latest_release_url).await?;
+    let outcome = update_check_outcome(&tag_name)?;
     if !outcome.update_available {
         return Ok(StageUpdateOutcome::NoUpdate);
     }
@@ -202,149 +254,38 @@ pub async fn stage_update_if_available(
     }
 
     let pending = pending_update_path(aikit_dir);
-    if pending.exists() {
+    if pending_update_version(aikit_dir)?.as_deref() == Some(outcome.latest_version.as_str()) {
         return Ok(StageUpdateOutcome::AlreadyStaged {
             version: outcome.latest_version,
         });
     }
 
-    let staged = download_and_stage(client, latest_release_url).await?;
-    if let Some(parent) = pending.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::copy(&staged, &pending)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = fs::metadata(&pending)?.permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&pending, permissions)?;
+    let assets = release_assets_for_tag(latest_release_url, tag_name)?;
+    on_download(&outcome.latest_version);
+    let staged = download_and_stage_assets(client, &assets).await?;
+    let pending_dir = pending_update_dir(aikit_dir);
+    fs::create_dir_all(&pending_dir)?;
+    let mut version_file = tempfile::Builder::new()
+        .prefix(".aikit-version-")
+        .tempfile_in(&pending_dir)?;
+    version_file.write_all(outcome.latest_version.as_bytes())?;
+    version_file.as_file().sync_all()?;
+
+    let installation =
+        install_binary_with_backup(&staged.path().join(binary_file_name()), &pending)?;
+    if let Err(err) = version_file.persist(pending_dir.join("version")) {
+        if let Err(rollback_error) = installation.rollback() {
+            return Err(AikitError::Provider(format!(
+                "update version publication failed: {}; rollback failed: {rollback_error}",
+                err.error
+            )));
+        }
+        return Err(AikitError::Io(err.error));
     }
 
     Ok(StageUpdateOutcome::Staged {
         version: outcome.latest_version,
     })
-}
-
-pub fn apply_pending_update_at_startup(
-    aikit_dir: &Path,
-    #[allow(unused_variables)] pending_version: Option<&str>,
-) -> Result<Option<String>> {
-    let pending = pending_update_path(aikit_dir);
-    if !pending.exists() {
-        return Ok(None);
-    }
-
-    let target = std::env::current_exe().map_err(AikitError::Io)?;
-
-    #[cfg(windows)]
-    {
-        spawn_windows_replacer_and_launch(&pending, &target, aikit_dir)?;
-        std::process::exit(0);
-    }
-
-    #[cfg(not(windows))]
-    {
-        install_binary(&pending, &target)?;
-        clear_pending_update(aikit_dir)?;
-        Ok(pending_version.map(str::to_string))
-    }
-}
-
-pub async fn perform_update(
-    client: &Client,
-    latest_release_url: &str,
-) -> Result<UpdateApplyOutcome> {
-    let staged = download_and_stage(client, latest_release_url).await?;
-    let target = std::env::current_exe().map_err(AikitError::Io)?;
-
-    #[cfg(windows)]
-    {
-        spawn_windows_replacer(&staged, &target)?;
-        Ok(UpdateApplyOutcome {
-            message: "Update scheduled. Please restart aikit.".into(),
-            quit_after: true,
-        })
-    }
-
-    #[cfg(not(windows))]
-    {
-        install_binary(&staged, &target)?;
-        Ok(UpdateApplyOutcome {
-            message: "Update installed. Please restart aikit.".into(),
-            quit_after: true,
-        })
-    }
-}
-
-pub fn install_binary(staged: &Path, target: &Path) -> Result<()> {
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::copy(staged, target)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = fs::metadata(target)?.permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(target, permissions)?;
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-pub fn spawn_windows_replacer_and_launch(
-    staged: &Path,
-    target: &Path,
-    aikit_dir: &Path,
-) -> Result<()> {
-    use std::process::Command;
-
-    let staged = powershell_literal(staged);
-    let target = powershell_literal(target);
-    let pending_dir = powershell_literal(&aikit_dir.join("pending-update"));
-    let script = format!(
-        "Start-Sleep -Seconds 1; Copy-Item -LiteralPath '{staged}' -Destination '{target}' -Force; Remove-Item -LiteralPath '{pending_dir}' -Recurse -Force; Start-Process -FilePath '{target}'"
-    );
-    Command::new("powershell")
-        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-        .spawn()
-        .map_err(AikitError::Io)?;
-    Ok(())
-}
-
-#[cfg(not(windows))]
-pub fn spawn_windows_replacer_and_launch(
-    _staged: &Path,
-    _target: &Path,
-    _aikit_dir: &Path,
-) -> Result<()> {
-    Err(AikitError::Provider(
-        "windows updater helper is only available on windows".into(),
-    ))
-}
-
-#[cfg(windows)]
-pub fn spawn_windows_replacer(staged: &Path, target: &Path) -> Result<()> {
-    use std::process::Command;
-
-    let staged = powershell_literal(staged);
-    let target = powershell_literal(target);
-    let script = format!(
-        "Start-Sleep -Seconds 1; Copy-Item -LiteralPath '{staged}' -Destination '{target}' -Force"
-    );
-    Command::new("powershell")
-        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-        .spawn()
-        .map_err(AikitError::Io)?;
-    Ok(())
-}
-
-#[cfg(not(windows))]
-pub fn spawn_windows_replacer(_staged: &Path, _target: &Path) -> Result<()> {
-    Err(AikitError::Provider(
-        "windows updater helper is only available on windows".into(),
-    ))
 }
 
 async fn fetch_latest_release_tag(client: &Client, latest_release_url: &str) -> Result<String> {
@@ -399,34 +340,28 @@ fn verify_sha256(bytes: &[u8], expected: &str) -> Result<()> {
     Ok(())
 }
 
-fn extract_binary_from_archive(bytes: &[u8], archive_name: &str) -> Result<PathBuf> {
-    let extract_dir =
-        std::env::temp_dir().join(format!("aikit-update-extract-{}", std::process::id()));
-    fs::create_dir_all(&extract_dir)?;
+fn extract_binary_from_archive(bytes: &[u8], archive_name: &str) -> Result<tempfile::TempDir> {
+    let extract_dir = tempfile::Builder::new().prefix("aikit-update-").tempdir()?;
     let binary_name = binary_file_name();
 
     if archive_name.ends_with(".zip") {
-        extract_zip(bytes, &extract_dir, binary_name)?;
+        extract_zip(bytes, extract_dir.path(), binary_name)?;
     } else if archive_name.ends_with(".tar.gz") {
-        extract_tar_gz(bytes, &extract_dir, binary_name)?;
+        extract_tar_gz(bytes, extract_dir.path(), binary_name)?;
     } else {
         return Err(AikitError::Provider(format!(
             "unsupported archive format: {archive_name}"
         )));
     }
 
-    let staged = extract_dir.join(binary_name);
+    let staged = extract_dir.path().join(binary_name);
     if !staged.exists() {
         return Err(AikitError::Provider(format!(
             "archive does not contain `{binary_name}`"
         )));
     }
 
-    let persistent_dir = std::env::temp_dir().join(format!("aikit-update-{}", std::process::id()));
-    fs::create_dir_all(&persistent_dir)?;
-    let persistent_path = persistent_dir.join(binary_name);
-    fs::copy(&staged, &persistent_path)?;
-    Ok(persistent_path)
+    Ok(extract_dir)
 }
 
 fn extract_zip(bytes: &[u8], dest: &Path, binary_name: &str) -> Result<()> {
@@ -486,9 +421,4 @@ fn version_parts(version: &str) -> Vec<u64> {
         .split(['.', '-'])
         .map(|part| part.parse::<u64>().unwrap_or(0))
         .collect()
-}
-
-#[cfg(windows)]
-fn powershell_literal(path: &Path) -> String {
-    path.display().to_string().replace('\'', "''")
 }

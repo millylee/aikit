@@ -95,11 +95,21 @@ Security note: imported API keys are saved in local TOML as plain text. Keep you
 - `r`: refresh models for the selected provider using the selected API key.
 - `m`: add a manual model for the selected provider.
 - `?`: show shortcuts.
-- `u`: check GitHub Releases for updates.
+- `u`: check GitHub Releases for updates in the background; the footer immediately shows checking, then download progress or the result. Repeated presses do not start duplicate checks.
 - `Ctrl+s`: apply the active provider + API key + model to enabled targets.
 - `q` / `Esc`: quit.
 
 The footer shows the current `aikit` version plus shortcut hints.
+
+### Updates
+
+Updates download while the TUI remains usable and are installed the next time you start `aikit`; downloading never forces the current session to exit.
+
+Before installation, `aikit` validates the downloaded executable and prepares its replacement. If its Web UI daemon is running, it stops that daemon and restores it with the original bind address and port after replacement. A stopped daemon stays stopped.
+
+The updated TUI continues in the same terminal, without minimizing the window or opening another console. The original process waits for the new TUI, so the shell does not resume reading input during the session.
+
+If validation, replacement, daemon restart, or TUI initialization fails, `aikit` reports the error, attempts to restore the previous executable and daemon, and retains the download for retry. Pending update metadata is cleared only after the new TUI renders its first frame; download cleanup follows its startup acknowledgment. The previous executable backup is cleaned up on a later launch once it is no longer in use.
 
 Modal form keys:
 

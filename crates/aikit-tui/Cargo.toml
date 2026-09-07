@@ -22,10 +22,10 @@ crossterm.workspace = true
 ratatui.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-tempfile.workspace = true
 toml.workspace = true
 wiremock.workspace = true

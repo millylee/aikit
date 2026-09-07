@@ -54,7 +54,8 @@ fn r_requests_model_refresh() {
 
 #[test]
 fn apply_stage_update_outcome_sets_pending_status() {
-    let mut state = AppState::default();
+    let directory = tempdir().unwrap();
+    let mut state = AppState::new(directory.path().join("config.toml"));
     state
         .apply_stage_update_outcome(StageUpdateOutcome::Staged {
             version: "9.9.9".into(),
@@ -135,6 +136,220 @@ fn record_update_check_persists_timestamp() {
 }
 
 #[test]
+fn begin_update_check_preserves_existing_progress_when_busy() {
+    let mut state = AppState::default();
+    assert!(!state.update_in_progress);
+
+    assert!(state.begin_update_check());
+    assert!(state.update_in_progress);
+    assert_eq!(state.status, "正在检查更新…");
+    state.set_status("Waiting for update response");
+    let checking_state = state.clone();
+
+    assert!(!state.begin_update_check());
+    assert_eq!(state, checking_state);
+}
+
+#[test]
+fn update_download_progress_includes_version_and_survives_repeated_u() {
+    let mut state = AppState::default();
+    state.config.update_prompt.pending_version = Some("9.9.8".into());
+    state.config.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+    let configuration = state.config.clone();
+    assert!(state.begin_update_check());
+
+    state.mark_update_downloading("9.9.9");
+
+    assert!(state.update_in_progress);
+    assert_eq!(state.status, "正在下载更新 v9.9.9…");
+    assert_eq!(state.config, configuration);
+    let downloading_state = state.clone();
+    assert_eq!(
+        handle_key(
+            &mut state,
+            KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+        ),
+        AppAction::None
+    );
+    assert!(!state.begin_update_check());
+    assert_eq!(state, downloading_state);
+}
+
+#[test]
+fn finish_update_check_persists_staged_version_and_timestamp() {
+    for outcome in [
+        StageUpdateOutcome::Staged {
+            version: "9.9.9".into(),
+        },
+        StageUpdateOutcome::AlreadyStaged {
+            version: "9.9.9".into(),
+        },
+    ] {
+        let directory = tempdir().unwrap();
+        let config_path = directory.path().join("config.toml");
+        let mut configuration = AikitConfig::default();
+        configuration.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+        configuration.update_prompt.skipped_version = Some("9.9.8".into());
+        configuration.save_with_sidecars(&config_path).unwrap();
+        let mut state = AppState::from_config(config_path.clone(), configuration);
+        assert!(state.begin_update_check());
+        state.mark_update_downloading("9.9.9");
+
+        state.finish_update_check(Ok(outcome)).unwrap();
+
+        assert!(!state.update_in_progress);
+        assert_eq!(
+            state.config.update_prompt.pending_version.as_deref(),
+            Some("9.9.9")
+        );
+        assert_eq!(
+            state.config.update_prompt.skipped_version.as_deref(),
+            Some("9.9.8")
+        );
+        assert_eq!(
+            state.status,
+            "Update v9.9.9 ready — restart aikit to install"
+        );
+        assert!(aikit_core::updater::update_check_cooldown_active(
+            state.config.update_prompt.last_checked_at.as_deref()
+        ));
+        let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+        assert_eq!(loaded.update_prompt, state.config.update_prompt);
+    }
+}
+
+#[test]
+fn finish_update_check_reports_no_update_and_persists_timestamp() {
+    let directory = tempdir().unwrap();
+    let config_path = directory.path().join("config.toml");
+    let configuration = AikitConfig::default();
+    configuration.save_with_sidecars(&config_path).unwrap();
+    let mut state = AppState::from_config(config_path.clone(), configuration);
+    assert!(state.begin_update_check());
+
+    state
+        .finish_update_check(Ok(StageUpdateOutcome::NoUpdate))
+        .unwrap();
+
+    assert!(!state.update_in_progress);
+    assert_eq!(
+        state.status,
+        format!("Already up to date: v{}", env!("CARGO_PKG_VERSION"))
+    );
+    assert!(state.config.update_prompt.pending_version.is_none());
+    assert!(aikit_core::updater::update_check_cooldown_active(
+        state.config.update_prompt.last_checked_at.as_deref()
+    ));
+    let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert_eq!(loaded.update_prompt, state.config.update_prompt);
+}
+
+#[test]
+fn finish_update_check_records_failure_and_allows_retry() {
+    let directory = tempdir().unwrap();
+    let config_path = directory.path().join("config.toml");
+    let mut configuration = AikitConfig::default();
+    configuration.update_prompt.pending_version = Some("9.9.8".into());
+    configuration.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+    configuration.save_with_sidecars(&config_path).unwrap();
+    let mut state = AppState::from_config(config_path.clone(), configuration);
+    assert!(state.begin_update_check());
+    state.mark_update_downloading("9.9.9");
+
+    let error = state
+        .finish_update_check(Err(AikitError::Provider("download failed".into())))
+        .unwrap_err();
+
+    assert!(matches!(error, AikitError::Provider(message) if message == "download failed"));
+    assert!(!state.update_in_progress);
+    assert_eq!(
+        state.config.update_prompt.pending_version.as_deref(),
+        Some("9.9.8")
+    );
+    assert!(aikit_core::updater::update_check_cooldown_active(
+        state.config.update_prompt.last_checked_at.as_deref()
+    ));
+    let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert_eq!(loaded.update_prompt, state.config.update_prompt);
+
+    assert_eq!(
+        handle_key(
+            &mut state,
+            KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+        ),
+        AppAction::CheckUpdates
+    );
+    assert!(state.update_in_progress);
+    assert_eq!(state.status, "正在检查更新…");
+    state
+        .finish_update_check(Ok(StageUpdateOutcome::NoUpdate))
+        .unwrap();
+    assert!(!state.update_in_progress);
+    assert_eq!(
+        state.config.update_prompt.pending_version.as_deref(),
+        Some("9.9.8")
+    );
+    let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert_eq!(loaded.update_prompt, state.config.update_prompt);
+}
+
+#[test]
+fn finish_update_check_clears_busy_when_state_persistence_fails() {
+    for outcome in [
+        Ok(StageUpdateOutcome::NoUpdate),
+        Ok(StageUpdateOutcome::Staged {
+            version: "9.9.9".into(),
+        }),
+        Ok(StageUpdateOutcome::AlreadyStaged {
+            version: "9.9.9".into(),
+        }),
+        Err(AikitError::Provider("check failed".into())),
+    ] {
+        let directory = tempdir().unwrap();
+        let config_path = directory.path().join("config.toml");
+        let mut configuration = AikitConfig::default();
+        configuration.update_prompt.pending_version = Some("9.9.8".into());
+        configuration.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+        configuration.save_to(&config_path).unwrap();
+        let state_path = aikit_core::config::state_path(&config_path);
+        std::fs::create_dir(&state_path).unwrap();
+        let mut state = AppState::from_config(config_path.clone(), configuration.clone());
+        assert!(state.begin_update_check());
+
+        let error = state.finish_update_check(outcome).unwrap_err();
+
+        assert!(matches!(error, AikitError::Io(_)));
+        assert!(!state.update_in_progress);
+        assert_eq!(state.config, configuration);
+
+        std::fs::remove_dir(&state_path).unwrap();
+        assert_eq!(
+            handle_key(
+                &mut state,
+                KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+            ),
+            AppAction::CheckUpdates
+        );
+        assert!(state.update_in_progress);
+        state
+            .finish_update_check(Ok(StageUpdateOutcome::Staged {
+                version: "9.9.9".into(),
+            }))
+            .unwrap();
+        assert!(!state.update_in_progress);
+        assert_eq!(
+            state.config.update_prompt.pending_version.as_deref(),
+            Some("9.9.9")
+        );
+        assert!(aikit_core::updater::update_check_cooldown_active(
+            state.config.update_prompt.last_checked_at.as_deref()
+        ));
+        let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+        assert_eq!(loaded.update_prompt, state.config.update_prompt);
+    }
+}
+
+#[test]
 fn format_refresh_error_keeps_short_provider_messages() {
     let err = AikitError::Provider("authentication or permission problem".into());
     let message = format_refresh_error(&err);
@@ -180,6 +395,7 @@ fn question_mark_opens_shortcuts_modal() {
 #[test]
 fn u_requests_update_check() {
     let mut state = AppState::default();
+    assert!(!state.update_in_progress);
 
     let action = handle_key(
         &mut state,
@@ -187,6 +403,35 @@ fn u_requests_update_check() {
     );
 
     assert_eq!(action, AppAction::CheckUpdates);
+    assert_eq!(state.status, "正在检查更新…");
+    assert!(state.update_in_progress);
+}
+
+#[test]
+fn u_does_not_enqueue_duplicate_update_checks() {
+    let mut state = AppState::default();
+    let update_key = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE);
+
+    assert_eq!(handle_key(&mut state, update_key), AppAction::CheckUpdates);
+    let checking_state = state.clone();
+
+    assert_eq!(handle_key(&mut state, update_key), AppAction::None);
+    assert_eq!(state, checking_state);
+}
+
+#[test]
+fn u_in_shortcuts_modal_does_not_begin_update_check() {
+    let mut state = AppState::default();
+    state.open_shortcuts_modal();
+    let modal_state = state.clone();
+
+    let action = handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+    );
+
+    assert_eq!(action, AppAction::None);
+    assert_eq!(state, modal_state);
 }
 
 #[test]
@@ -203,77 +448,6 @@ fn m_opens_add_model_modal() {
 
     assert_eq!(action, AppAction::None);
     assert!(matches!(state.modal_state, ModalState::ModelForm(_)));
-}
-
-#[tokio::test]
-async fn check_updates_reports_available_release() {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(302).insert_header(
-            "Location",
-            format!("{}/millylee/aikit/releases/tag/v999.0.0", server.uri()),
-        ))
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/millylee/aikit/releases/tag/v999.0.0"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&server)
-        .await;
-
-    let state = AppState::default();
-    let client = reqwest::Client::new();
-    let outcome = state
-        .check_updates(
-            &client,
-            &format!("{}/millylee/aikit/releases/latest", server.uri()),
-        )
-        .await
-        .unwrap();
-
-    assert!(outcome.update_available);
-    assert_eq!(outcome.latest_version, "999.0.0");
-    assert!(outcome.message.contains("Update available"));
-}
-
-#[tokio::test]
-async fn check_updates_reports_current_version_up_to_date() {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/millylee/aikit/releases/latest"))
-        .respond_with(ResponseTemplate::new(302).insert_header(
-            "Location",
-            format!(
-                "{}/millylee/aikit/releases/tag/v{}",
-                server.uri(),
-                env!("CARGO_PKG_VERSION")
-            ),
-        ))
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!(
-            "/millylee/aikit/releases/tag/v{}",
-            env!("CARGO_PKG_VERSION")
-        )))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&server)
-        .await;
-
-    let state = AppState::default();
-    let client = reqwest::Client::new();
-    let outcome = state
-        .check_updates(
-            &client,
-            &format!("{}/millylee/aikit/releases/latest", server.uri()),
-        )
-        .await
-        .unwrap();
-
-    assert!(!outcome.update_available);
-    assert_eq!(outcome.latest_version, env!("CARGO_PKG_VERSION"));
-    assert!(outcome.message.contains("Already up to date"));
 }
 
 #[test]
@@ -300,6 +474,58 @@ fn pending_version_persists_in_state_sidecar() {
         saved.update_prompt.pending_version.as_deref(),
         Some("9.9.9")
     );
+}
+
+#[test]
+fn clear_pending_update_version_preserves_staged_binary() {
+    let directory = tempdir().unwrap();
+    let config_path = directory.path().join("config.toml");
+    let pending_path = aikit_core::updater::pending_update_path(directory.path());
+    std::fs::create_dir_all(pending_path.parent().unwrap()).unwrap();
+    std::fs::write(&pending_path, b"staged binary").unwrap();
+    let mut configuration = AikitConfig::default();
+    configuration.update_prompt.pending_version = Some("9.9.9".into());
+    configuration.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+    configuration.update_prompt.skipped_version = Some("9.9.8".into());
+    configuration.save_with_sidecars(&config_path).unwrap();
+    let mut state = AppState::from_config(config_path.clone(), configuration);
+
+    state.clear_pending_update_version().unwrap();
+
+    assert!(state.config.update_prompt.pending_version.is_none());
+    assert_eq!(
+        state.config.update_prompt.last_checked_at.as_deref(),
+        Some("2020-01-01T00:00:00Z")
+    );
+    assert_eq!(
+        state.config.update_prompt.skipped_version.as_deref(),
+        Some("9.9.8")
+    );
+    let loaded = AikitConfig::load_with_sidecars(&config_path).unwrap();
+    assert_eq!(loaded.update_prompt, state.config.update_prompt);
+    assert_eq!(std::fs::read(&pending_path).unwrap(), b"staged binary");
+}
+
+#[test]
+fn clear_pending_update_version_preserves_state_when_persistence_fails() {
+    let directory = tempdir().unwrap();
+    let config_path = directory.path().join("config.toml");
+    let pending_path = aikit_core::updater::pending_update_path(directory.path());
+    std::fs::create_dir_all(pending_path.parent().unwrap()).unwrap();
+    std::fs::write(&pending_path, b"staged binary").unwrap();
+    let mut configuration = AikitConfig::default();
+    configuration.update_prompt.pending_version = Some("9.9.9".into());
+    configuration.update_prompt.last_checked_at = Some("2020-01-01T00:00:00Z".into());
+    configuration.save_to(&config_path).unwrap();
+    std::fs::create_dir(aikit_core::config::state_path(&config_path)).unwrap();
+    let mut state = AppState::from_config(config_path, configuration);
+    let previous_state = state.clone();
+
+    let error = state.clear_pending_update_version().unwrap_err();
+
+    assert!(matches!(error, AikitError::Io(_)));
+    assert_eq!(state, previous_state);
+    assert_eq!(std::fs::read(&pending_path).unwrap(), b"staged binary");
 }
 
 #[test]
