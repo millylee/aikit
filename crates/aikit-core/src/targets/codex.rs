@@ -172,9 +172,12 @@ fn set_aikit_api_key_env(api_key: &str, persist_user_scope: bool, _home_dir: &Pa
     if persist_user_scope {
         #[cfg(all(windows, not(test)))]
         {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             let Ok(_status) = Command::new("setx")
                 .arg("AIKIT_API_KEY")
                 .arg(api_key)
+                .creation_flags(CREATE_NO_WINDOW)
                 .status()
             else {
                 return;
