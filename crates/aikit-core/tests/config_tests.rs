@@ -44,6 +44,8 @@ fn saves_and_loads_config_as_toml() {
         claude_pin_models: true,
         context_1m: true,
         bypass_permissions: false,
+        max_thinking_effort: false,
+        claude_disable_betas: false,
     };
 
     config.save_with_sidecars(&path).unwrap();
@@ -92,6 +94,8 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         claude_pin_models: true,
         context_1m: true,
         bypass_permissions: false,
+        max_thinking_effort: false,
+        claude_disable_betas: false,
     };
 
     config.save_with_sidecars(&path).unwrap();

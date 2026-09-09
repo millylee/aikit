@@ -178,6 +178,8 @@ async fn config_defaults_when_file_missing() {
     assert_eq!(json["providers"].as_array().unwrap().len(), 0);
     assert_eq!(json["claude_pin_models"], true);
     assert_eq!(json["bypass_permissions"], false);
+    assert_eq!(json["max_thinking_effort"], false);
+    assert_eq!(json["claude_disable_betas"], false);
 }
 
 #[tokio::test]
@@ -410,7 +412,9 @@ async fn targets_update_toggles_flags() {
                     "targets": [{ "id": "claude", "enabled": enabled }],
                     "claude_pin_models": enabled,
                     "context_1m": enabled,
-                    "bypass_permissions": enabled
+                    "bypass_permissions": enabled,
+                    "max_thinking_effort": enabled,
+                    "claude_disable_betas": enabled
                 }),
             ))
             .await
@@ -427,11 +431,15 @@ async fn targets_update_toggles_flags() {
         assert_eq!(json["claude_pin_models"], enabled);
         assert_eq!(json["context_1m"], enabled);
         assert_eq!(json["bypass_permissions"], enabled);
+        assert_eq!(json["max_thinking_effort"], enabled);
+        assert_eq!(json["claude_disable_betas"], enabled);
 
         let saved = AikitConfig::load_from(&config_path).unwrap();
         assert_eq!(saved.claude_pin_models, enabled);
         assert_eq!(saved.context_1m, enabled);
         assert_eq!(saved.bypass_permissions, enabled);
+        assert_eq!(saved.max_thinking_effort, enabled);
+        assert_eq!(saved.claude_disable_betas, enabled);
     }
 }
 
@@ -553,6 +561,72 @@ async fn apply_toggles_codex_bypass_permissions() {
         assert_eq!(written.contains("approval_policy = \"never\""), enabled);
         assert_eq!(
             written.contains("sandbox_mode = \"danger-full-access\""),
+            enabled
+        );
+    }
+}
+
+#[tokio::test]
+async fn apply_toggles_max_thinking_effort_for_both_targets() {
+    let (app, dir) = seeded_router();
+    let claude_dir = dir.path().join(".claude");
+    let codex_dir = dir.path().join(".codex");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::create_dir_all(&codex_dir).unwrap();
+    let claude_path = claude_dir.join("settings.json");
+    let codex_path = codex_dir.join("config.toml");
+
+    let response = app
+        .clone()
+        .oneshot(put_json(
+            "/api/targets",
+            serde_json::json!({
+                "targets": [
+                    { "id": "claude", "enabled": true, "config_path": claude_path },
+                    { "id": "codex", "enabled": true, "config_path": codex_path }
+                ]
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    for enabled in [true, false] {
+        let response = app
+            .clone()
+            .oneshot(put_json(
+                "/api/targets",
+                serde_json::json!({ "max_thinking_effort": enabled }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_json(response).await["max_thinking_effort"], enabled);
+
+        let response = app
+            .clone()
+            .oneshot(post_json("/api/apply", serde_json::json!({})))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let report = body_json(response).await;
+        assert_eq!(report["succeeded"], 2);
+        assert_eq!(report["failed"], 0);
+
+        let claude_written = std::fs::read_to_string(&claude_path).unwrap();
+        let claude_json: serde_json::Value = serde_json::from_str(&claude_written).unwrap();
+        assert_eq!(
+            claude_json["env"]["CLAUDE_CODE_EFFORT_LEVEL"] == "max",
+            enabled
+        );
+        assert_eq!(
+            claude_json["env"]["CLAUDE_CODE_ALWAYS_ENABLE_EFFORT"] == "1",
+            enabled
+        );
+
+        let codex_written = std::fs::read_to_string(&codex_path).unwrap();
+        assert_eq!(
+            codex_written.contains("model_reasoning_effort = \"max\""),
             enabled
         );
     }

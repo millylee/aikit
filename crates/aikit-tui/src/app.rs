@@ -1005,7 +1005,7 @@ impl AppState {
     }
 
     pub fn apply_row_count(&self) -> usize {
-        self.config.targets.len() + 3
+        self.config.targets.len() + 5
     }
 
     pub fn target_status(&self, target_id: &str) -> Option<&str> {
@@ -1110,8 +1110,12 @@ impl AppState {
                     self.toggle_claude_pin_models();
                 } else if self.target_index == target_count + 1 {
                     self.toggle_context_1m();
-                } else {
+                } else if self.target_index == target_count + 2 {
                     self.toggle_bypass_permissions();
+                } else if self.target_index == target_count + 3 {
+                    self.toggle_max_thinking_effort();
+                } else {
+                    self.toggle_claude_disable_betas();
                 }
             }
         }
@@ -1177,6 +1181,26 @@ impl AppState {
             "disabled"
         };
         self.set_status(format!("Bypass permissions {status}"));
+    }
+
+    pub fn toggle_max_thinking_effort(&mut self) {
+        self.config.max_thinking_effort = !self.config.max_thinking_effort;
+        let status = if self.config.max_thinking_effort {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Max thinking effort {status}"));
+    }
+
+    pub fn toggle_claude_disable_betas(&mut self) {
+        self.config.claude_disable_betas = !self.config.claude_disable_betas;
+        let status = if self.config.claude_disable_betas {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Disable experimental betas {status}"));
     }
 
     pub async fn refresh_active_models(
