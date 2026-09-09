@@ -15,6 +15,7 @@ pub struct TargetSelection {
     pub claude_pin_models: bool,
     pub context_1m: bool,
     pub bypass_permissions: bool,
+    pub max_thinking_effort: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

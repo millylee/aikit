@@ -100,6 +100,25 @@ impl ClaudeWriter {
         } else {
             env_object.remove("CLAUDE_CODE_AUTO_COMPACT_WINDOW");
         }
+        if selection.max_thinking_effort {
+            env_object.insert(
+                "CLAUDE_CODE_EFFORT_LEVEL".into(),
+                Value::String("max".to_string()),
+            );
+            env_object.insert(
+                "CLAUDE_CODE_ALWAYS_ENABLE_EFFORT".into(),
+                Value::String("1".to_string()),
+            );
+        } else {
+            if env_object.get("CLAUDE_CODE_EFFORT_LEVEL").and_then(Value::as_str) == Some("max") {
+                env_object.remove("CLAUDE_CODE_EFFORT_LEVEL");
+            }
+            if env_object.get("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT").and_then(Value::as_str)
+                == Some("1")
+            {
+                env_object.remove("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT");
+            }
+        }
         object.insert("model".into(), Value::String(effective_model.clone()));
 
         if selection.bypass_permissions {

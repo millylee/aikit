@@ -43,6 +43,7 @@ pub struct TargetsPayload {
     pub claude_pin_models: Option<bool>,
     pub context_1m: Option<bool>,
     pub bypass_permissions: Option<bool>,
+    pub max_thinking_effort: Option<bool>,
 }
 
 pub async fn set_targets(
@@ -54,6 +55,7 @@ pub async fn set_targets(
         && payload.claude_pin_models.is_none()
         && payload.context_1m.is_none()
         && payload.bypass_permissions.is_none()
+        && payload.max_thinking_effort.is_none()
     {
         return Err(ApiError::BadRequest("no target updates provided".into()));
     }
@@ -84,6 +86,9 @@ pub async fn set_targets(
         }
         if let Some(value) = payload.bypass_permissions {
             config.bypass_permissions = value;
+        }
+        if let Some(value) = payload.max_thinking_effort {
+            config.max_thinking_effort = value;
         }
         Ok(())
     })?;
