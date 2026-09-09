@@ -1,7 +1,7 @@
 use aikit_core::{
     config::{ActiveSelection, AikitConfig, ApiKeyConfig, ModelCache, ProviderConfig},
     config_ops::{
-        add_provider, backup_config_file, delete_api_key, delete_model, delete_provider,
+        add_model, add_provider, backup_config_file, delete_api_key, delete_model, delete_provider,
         ProviderForm,
     },
 };
@@ -106,6 +106,46 @@ fn delete_model_errors_when_model_not_in_manual_models() {
     let mut config = sample_config();
     // "model" only exists in the cache, not in manual_models.
     assert!(delete_model(&mut config, "provider", "model").is_err());
+}
+
+#[test]
+fn add_model_appends_to_manual_models() {
+    let mut config = sample_config();
+    config.providers[0].manual_models = vec!["manual-a".into()];
+
+    add_model(&mut config, "provider", "manual-b").unwrap();
+
+    assert_eq!(
+        config.providers[0].manual_models,
+        vec!["manual-a".to_string(), "manual-b".to_string()]
+    );
+}
+
+#[test]
+fn add_model_is_idempotent_for_existing_model() {
+    let mut config = sample_config();
+    config.providers[0].manual_models = vec!["manual-a".into()];
+
+    add_model(&mut config, "provider", "manual-a").unwrap();
+
+    assert_eq!(
+        config.providers[0].manual_models,
+        vec!["manual-a".to_string()]
+    );
+}
+
+#[test]
+fn add_model_rejects_empty_model_id() {
+    let mut config = sample_config();
+    assert!(add_model(&mut config, "provider", "").is_err());
+    assert!(add_model(&mut config, "provider", "   ").is_err());
+    assert!(config.providers[0].manual_models.is_empty());
+}
+
+#[test]
+fn add_model_errors_for_unknown_provider() {
+    let mut config = sample_config();
+    assert!(add_model(&mut config, "missing", "model").is_err());
 }
 
 #[test]

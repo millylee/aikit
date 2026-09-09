@@ -26,6 +26,63 @@
     setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
   }
 
+  function closeModal() {
+    var root = $("modal-root");
+    if (!root) return;
+    root.textContent = "";
+    root.style.display = "none";
+  }
+
+  function openModal(title, bodyNodes, buttons) {
+    var root = $("modal-root");
+    root.textContent = "";
+    var actions = el("div", { "class": "row modal-actions" }, buttons);
+    var card = el("div", { "class": "modal-card" }, [el("h3", { text: title })].concat(bodyNodes, [actions]));
+    card.onclick = function (event) {
+      if (event && event.stopPropagation) event.stopPropagation();
+    };
+    var overlay = el("div", { "class": "modal-overlay", onclick: closeModal }, [card]);
+    root.appendChild(overlay);
+    root.style.display = "";
+  }
+
+  function openFormModal(title, fields, onSubmit) {
+    var inputs = {};
+    var rows = fields.map(function (field) {
+      var input = el("input", { type: field.type || "text" });
+      if (field.placeholder) input.placeholder = field.placeholder;
+      if (field.value) input.value = field.value;
+      input.onkeydown = function (event) {
+        if (event && event.key === "Enter") submit();
+      };
+      inputs[field.id] = input;
+      return el("div", { "class": "row" }, [el("label", { text: field.label }), input]);
+    });
+    var submitButton = el("button", { "class": "primary", text: "确定" });
+    function submit() {
+      var values = {};
+      for (var i = 0; i < fields.length; i++) {
+        var value = String(inputs[fields[i].id].value || "").trim();
+        if (fields[i].required && !value) {
+          setStatus("请填写「" + fields[i].label + "」", "error");
+          return;
+        }
+        values[fields[i].id] = value;
+      }
+      closeModal();
+      onSubmit(values);
+    }
+    submitButton.onclick = submit;
+    openModal(title, rows, [submitButton, el("button", { text: "取消", onclick: closeModal })]);
+  }
+
+  function openDangerModal(title, message, actionText, onAction) {
+    openModal(title, [el("p", { text: message })], [
+      el("button", { "class": "danger", text: actionText, onclick: function () { closeModal(); onAction(); } }),
+      el("button", { text: "取消", onclick: closeModal })
+    ]);
+  }
+
   function api(method, path, body) {
     return fetch(path, {
       method: method,
@@ -149,10 +206,11 @@
         el("button", { "class": "small", text: "选用", onclick: function () { selectKey(provider, key); } }),
         el("button", { "class": "small danger", text: "替换", onclick: function () { replaceKey(provider, key); } }),
         el("button", { "class": "small danger", text: "删除", onclick: function () {
-          if (!confirm("删除密钥 " + key.name + "？")) return;
-          api("DELETE", "/api/providers/" + provider.id + "/keys/" + key.id)
-            .then(function () { setStatus("密钥已删除", "ok"); refreshAll(); })
-            .catch(function (err) { setStatus("删除失败：" + err.message, "error"); });
+          openDangerModal("删除密钥", "确定删除密钥 " + key.name + "？此操作不可撤销。", "删除", function () {
+            api("DELETE", "/api/providers/" + provider.id + "/keys/" + key.id)
+              .then(function () { setStatus("密钥已删除", "ok"); refreshAll(); })
+              .catch(function (err) { setStatus("删除失败：" + err.message, "error"); });
+          });
         } })
       ]));
     });
@@ -168,14 +226,19 @@
     var modelList = el("ul", { "class": "plain model-list" });
     if (!all.length) modelList.appendChild(el("li", {}, [el("span", { "class": "muted", text: "暂无模型，请先刷新或手动添加" })]));
     all.forEach(function (model) {
-      modelList.appendChild(el("li", { "class": isActive(provider.id, null, model) ? "active" : "" }, [
+      var nodes = [
         el("span", { text: model, onclick: function () { selectModel(provider, model); }, style: "flex:1" }),
         el("span", { "class": "badge", text: isActive(provider.id, null, model) ? "当前" : "" })
-      ]));
+      ];
+      if (manual.indexOf(model) >= 0) {
+        nodes.push(el("button", { "class": "small danger", text: "删除", onclick: function () { deleteManualModel(provider, model); } }));
+      }
+      modelList.appendChild(el("li", { "class": isActive(provider.id, null, model) ? "active" : "" }, nodes));
     });
     body.appendChild(modelList);
     body.appendChild(el("div", { "class": "row" }, [
-      el("button", { "class": "small", text: "刷新模型列表", onclick: function () { refreshModels(provider); } })
+      el("button", { "class": "small", text: "刷新模型列表", onclick: function () { refreshModels(provider); } }),
+      el("button", { "class": "small", text: "+ 手动添加模型", onclick: function () { addManualModel(provider); } })
     ]));
     if (provider.models_cache && provider.models_cache.last_error) {
       body.appendChild(el("p", { "class": "inline-error", text: "上次刷新失败：" + provider.models_cache.last_error }));
@@ -203,20 +266,22 @@
       } }),
       el("button", { text: "取消", onclick: function () { state.mode = "view"; renderDetail(); } }),
       el("button", { "class": "danger", text: "删除供应商", onclick: function () {
-        if (!confirm("删除供应商 " + provider.name + "？")) return;
-        api("DELETE", "/api/providers/" + provider.id)
-          .then(function () { state.providerId = null; state.mode = "view"; setStatus("供应商已删除", "ok"); refreshAll(); })
-          .catch(function (err) { setStatus("删除失败：" + err.message, "error"); });
+        openDangerModal("删除供应商", "确定删除供应商 " + provider.name + "？其密钥与模型配置将一并删除，此操作不可撤销。", "删除供应商", function () {
+          api("DELETE", "/api/providers/" + provider.id)
+            .then(function () { state.providerId = null; state.mode = "view"; setStatus("供应商已删除", "ok"); refreshAll(); })
+            .catch(function (err) { setStatus("删除失败：" + err.message, "error"); });
+        });
       } })
     ]));
   }
 
   function promptKey(title, callback) {
-    var name = prompt(title + "：密钥名称");
-    if (name === null) return;
-    var value = prompt(title + "：密钥值（明文，仅存储到本地配置）");
-    if (value === null) return;
-    callback(name.trim(), value.trim());
+    openFormModal(title, [
+      { id: "key-name", label: "密钥名称", required: true },
+      { id: "key-value", label: "密钥值（明文，仅存储到本地配置）", required: true }
+    ], function (values) {
+      callback(values["key-name"], values["key-value"]);
+    });
   }
 
   function addKey(provider) {
@@ -261,6 +326,24 @@
     api("POST", "/api/models/refresh", { provider_id: provider.id, api_key_id: keyId })
       .then(function (result) { setStatus("已刷新 " + result.refreshed + " 个模型", "ok"); refreshAll(); })
       .catch(function (err) { setStatus("刷新失败：" + err.message, "error"); });
+  }
+
+  function addManualModel(provider) {
+    openFormModal("手动添加模型", [
+      { id: "manual-model", label: "模型 ID", required: true, placeholder: "例如 glm-5.4" }
+    ], function (values) {
+      api("POST", "/api/providers/" + provider.id + "/models", { model: values["manual-model"] })
+        .then(function () { setStatus("模型已添加", "ok"); refreshAll(); })
+        .catch(function (err) { setStatus("添加失败：" + err.message, "error"); });
+    });
+  }
+
+  function deleteManualModel(provider, model) {
+    openDangerModal("删除模型", "确定删除手动模型 " + model + "？", "删除", function () {
+      api("DELETE", "/api/providers/" + provider.id + "/models/" + encodeURIComponent(model))
+        .then(function () { setStatus("模型已删除", "ok"); refreshAll(); })
+        .catch(function (err) { setStatus("删除失败：" + err.message, "error"); });
+    });
   }
 
   function renderTargets() {
@@ -414,15 +497,20 @@
   $("import-btn").onclick = importScan;
   $("updates-btn").onclick = checkUpdates;
   $("add-provider-btn").onclick = function () {
-    var id = prompt("新增供应商：ID（英文标识）");
-    if (!id) return;
-    var name = prompt("新增供应商：名称");
-    if (name === null) return;
-    var baseUrl = prompt("新增供应商：Base URL");
-    if (baseUrl === null) return;
-    api("POST", "/api/providers", { id: id.trim(), name: name || id, base_url: baseUrl.trim(), enabled: true })
-      .then(function (provider) { state.providerId = provider.id; setStatus("供应商已新增，请添加密钥", "ok"); refreshAll(); })
-      .catch(function (err) { setStatus("新增失败：" + err.message, "error"); });
+    openFormModal("新增供应商", [
+      { id: "provider-id", label: "ID（英文标识）", required: true },
+      { id: "provider-name", label: "名称" },
+      { id: "provider-url", label: "Base URL", required: true, type: "url" }
+    ], function (values) {
+      api("POST", "/api/providers", {
+        id: values["provider-id"],
+        name: values["provider-name"] || values["provider-id"],
+        base_url: values["provider-url"],
+        enabled: true
+      })
+        .then(function (provider) { state.providerId = provider.id; setStatus("供应商已新增，请添加密钥", "ok"); refreshAll(); })
+        .catch(function (err) { setStatus("新增失败：" + err.message, "error"); });
+    });
   };
 
   if (localStorage.getItem(TOKEN_KEY)) {
