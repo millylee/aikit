@@ -379,6 +379,34 @@ fn targets_text(state: &AppState) -> String {
         "{betas_cursor} {betas_enabled} Disable experimental betas"
     ));
 
+    let autoupdater_cursor = if state.target_index == target_count + 5 {
+        ">"
+    } else {
+        " "
+    };
+    let autoupdater_enabled = if state.config.claude_disable_autoupdater {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!(
+        "{autoupdater_cursor} {autoupdater_enabled} Disable Claude auto-updater"
+    ));
+
+    let telemetry_cursor = if state.target_index == target_count + 6 {
+        ">"
+    } else {
+        " "
+    };
+    let telemetry_enabled = if state.config.disable_telemetry {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!(
+        "{telemetry_cursor} {telemetry_enabled} Disable telemetry"
+    ));
+
     lines.join("\n")
 }
 

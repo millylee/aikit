@@ -19,10 +19,6 @@ use super::{
 pub struct CodexWriter;
 
 impl CodexWriter {
-    pub fn write_to_path(path: &Path, selection: &TargetSelection) -> Result<TargetWriteResult> {
-        Self::write_to_path_inner(path, selection, None)
-    }
-
     pub fn write_to_path_with_backup_root(
         path: &Path,
         selection: &TargetSelection,
@@ -113,6 +109,26 @@ impl CodexWriter {
             {
                 root.remove("sandbox_mode");
             }
+        }
+
+        let mut analytics = match root.remove("analytics") {
+            Some(toml::Value::Table(table)) => table,
+            Some(_) => {
+                return Err(AikitError::TargetWrite(
+                    "codex analytics must be a table".into(),
+                ))
+            }
+            None => toml::map::Map::new(),
+        };
+        if selection.disable_telemetry {
+            analytics.insert("enabled".into(), toml::Value::Boolean(false));
+        } else if analytics.get("enabled") == Some(&toml::Value::Boolean(false)) {
+            analytics.remove("enabled");
+        }
+        if analytics.is_empty() {
+            root.remove("analytics");
+        } else {
+            root.insert("analytics".into(), toml::Value::Table(analytics));
         }
 
         let mut model_providers = match root.remove("model_providers") {
@@ -301,6 +317,6 @@ impl TargetWriter for CodexWriter {
     }
 
     fn write(&self, selection: &TargetSelection) -> Result<TargetWriteResult> {
-        Self::write_to_path(&self.default_path()?, selection)
+        Self::write_to_path_inner(&self.default_path()?, selection, None)
     }
 }

@@ -59,6 +59,8 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         bypass_permissions: config.bypass_permissions,
         max_thinking_effort: config.max_thinking_effort,
         claude_disable_betas: config.claude_disable_betas,
+        claude_disable_autoupdater: config.claude_disable_autoupdater,
+        disable_telemetry: config.disable_telemetry,
     })
 }
 

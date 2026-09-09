@@ -1005,7 +1005,7 @@ impl AppState {
     }
 
     pub fn apply_row_count(&self) -> usize {
-        self.config.targets.len() + 5
+        self.config.targets.len() + 7
     }
 
     pub fn target_status(&self, target_id: &str) -> Option<&str> {
@@ -1114,8 +1114,12 @@ impl AppState {
                     self.toggle_bypass_permissions();
                 } else if self.target_index == target_count + 3 {
                     self.toggle_max_thinking_effort();
-                } else {
+                } else if self.target_index == target_count + 4 {
                     self.toggle_claude_disable_betas();
+                } else if self.target_index == target_count + 5 {
+                    self.toggle_claude_disable_autoupdater();
+                } else {
+                    self.toggle_disable_telemetry();
                 }
             }
         }
@@ -1201,6 +1205,26 @@ impl AppState {
             "disabled"
         };
         self.set_status(format!("Disable experimental betas {status}"));
+    }
+
+    pub fn toggle_claude_disable_autoupdater(&mut self) {
+        self.config.claude_disable_autoupdater = !self.config.claude_disable_autoupdater;
+        let status = if self.config.claude_disable_autoupdater {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Disable Claude auto-updater {status}"));
+    }
+
+    pub fn toggle_disable_telemetry(&mut self) {
+        self.config.disable_telemetry = !self.config.disable_telemetry;
+        let status = if self.config.disable_telemetry {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        self.set_status(format!("Disable telemetry {status}"));
     }
 
     pub async fn refresh_active_models(

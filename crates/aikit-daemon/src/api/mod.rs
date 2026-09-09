@@ -154,6 +154,8 @@ pub struct ConfigResponse {
     pub bypass_permissions: bool,
     pub max_thinking_effort: bool,
     pub claude_disable_betas: bool,
+    pub claude_disable_autoupdater: bool,
+    pub disable_telemetry: bool,
 }
 
 impl ConfigResponse {
@@ -171,6 +173,8 @@ impl ConfigResponse {
             bypass_permissions: config.bypass_permissions,
             max_thinking_effort: config.max_thinking_effort,
             claude_disable_betas: config.claude_disable_betas,
+            claude_disable_autoupdater: config.claude_disable_autoupdater,
+            disable_telemetry: config.disable_telemetry,
         }
     }
 }

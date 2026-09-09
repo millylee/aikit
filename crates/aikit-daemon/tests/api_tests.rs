@@ -180,6 +180,8 @@ async fn config_defaults_when_file_missing() {
     assert_eq!(json["bypass_permissions"], false);
     assert_eq!(json["max_thinking_effort"], false);
     assert_eq!(json["claude_disable_betas"], false);
+    assert_eq!(json["claude_disable_autoupdater"], false);
+    assert_eq!(json["disable_telemetry"], false);
 }
 
 #[tokio::test]
@@ -414,7 +416,9 @@ async fn targets_update_toggles_flags() {
                     "context_1m": enabled,
                     "bypass_permissions": enabled,
                     "max_thinking_effort": enabled,
-                    "claude_disable_betas": enabled
+                    "claude_disable_betas": enabled,
+                    "claude_disable_autoupdater": enabled,
+                    "disable_telemetry": enabled
                 }),
             ))
             .await
@@ -433,6 +437,8 @@ async fn targets_update_toggles_flags() {
         assert_eq!(json["bypass_permissions"], enabled);
         assert_eq!(json["max_thinking_effort"], enabled);
         assert_eq!(json["claude_disable_betas"], enabled);
+        assert_eq!(json["claude_disable_autoupdater"], enabled);
+        assert_eq!(json["disable_telemetry"], enabled);
 
         let saved = AikitConfig::load_from(&config_path).unwrap();
         assert_eq!(saved.claude_pin_models, enabled);
@@ -440,6 +446,8 @@ async fn targets_update_toggles_flags() {
         assert_eq!(saved.bypass_permissions, enabled);
         assert_eq!(saved.max_thinking_effort, enabled);
         assert_eq!(saved.claude_disable_betas, enabled);
+        assert_eq!(saved.claude_disable_autoupdater, enabled);
+        assert_eq!(saved.disable_telemetry, enabled);
     }
 }
 

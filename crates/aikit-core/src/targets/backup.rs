@@ -91,7 +91,9 @@ fn append_backup_log(aikit_dir: &Path, record: BackupLogRecord) -> Result<()> {
         .create(true)
         .append(true)
         .open(log_dir.join("backups.jsonl"))?;
-    writeln!(file, "{line}")?;
+    // Single write call: writeln! issues two writes (line + newline) which can
+    // interleave with a concurrent appender and merge two records onto one line.
+    file.write_all(format!("{line}\n").as_bytes())?;
     Ok(())
 }
 
