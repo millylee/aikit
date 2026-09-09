@@ -80,6 +80,7 @@
         config.context_1m = state.config.context_1m;
         config.bypass_permissions = state.config.bypass_permissions;
         config.max_thinking_effort = state.config.max_thinking_effort;
+        config.claude_disable_betas = state.config.claude_disable_betas;
       }
       state.config = config;
       if (!state.providerId && config.providers.length) {
@@ -276,7 +277,8 @@
     [["claude_pin_models", "固定所有 Claude 模型", config.claude_pin_models],
      ["context_1m", "1M 上下文", config.context_1m],
      ["bypass_permissions", "Bypass 权限（危险）", config.bypass_permissions],
-     ["max_thinking_effort", "最高思考强度", config.max_thinking_effort]].forEach(function (item) {
+     ["max_thinking_effort", "最高思考强度", config.max_thinking_effort],
+     ["claude_disable_betas", "禁用实验性 Beta（CC）", config.claude_disable_betas]].forEach(function (item) {
       var check = el("input", { type: "checkbox" });
       check.checked = item[2];
       check.onchange = function () {
@@ -307,6 +309,7 @@
         state.config.context_1m = config.context_1m;
         state.config.bypass_permissions = config.bypass_permissions;
         state.config.max_thinking_effort = config.max_thinking_effort;
+        state.config.claude_disable_betas = config.claude_disable_betas;
         renderTargets();
         setStatus("已更新", "ok");
       })
@@ -322,7 +325,7 @@
       var target = state.config.targets.find(function (t) { return t.id === update.id; });
       if (target) target.enabled = update.enabled;
     });
-    ["claude_pin_models", "context_1m", "bypass_permissions", "max_thinking_effort"].forEach(function (key) {
+    ["claude_pin_models", "context_1m", "bypass_permissions", "max_thinking_effort", "claude_disable_betas"].forEach(function (key) {
       if (key in payload) state.config[key] = payload[key];
     });
   }
@@ -334,6 +337,7 @@
       state.config.context_1m = config.context_1m;
       state.config.bypass_permissions = config.bypass_permissions;
       state.config.max_thinking_effort = config.max_thinking_effort;
+      state.config.claude_disable_betas = config.claude_disable_betas;
       renderTargets();
     }).catch(function () {});
   }

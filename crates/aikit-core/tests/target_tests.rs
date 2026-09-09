@@ -19,6 +19,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &backup_root,
     )
@@ -67,6 +68,7 @@ fn codex_writer_creates_missing_config() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -109,6 +111,7 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -132,6 +135,7 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -156,6 +160,7 @@ fn codex_writer_refuses_invalid_existing_toml() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -177,6 +182,7 @@ fn codex_writer_serializes_special_characters_in_toml() {
         context_1m: false,
         bypass_permissions: false,
         max_thinking_effort: false,
+        claude_disable_betas: false,
     };
 
     CodexWriter::write_to_path(&path, &selection).unwrap();
@@ -234,6 +240,7 @@ fn codex_writer_enables_1m_context_with_window_settings() {
             context_1m: true,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &dir.path().join("aikit"),
     )
@@ -279,6 +286,7 @@ model_auto_compact_token_limit = 900000
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &dir.path().join("aikit"),
     )
@@ -320,6 +328,7 @@ model = "keep-me"
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &dir.path().join("aikit"),
     )
@@ -382,6 +391,7 @@ model_providers = "not-a-table"
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -411,6 +421,7 @@ aikit = "not-a-table"
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -435,6 +446,7 @@ fn claude_writer_creates_minimal_json_config() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -462,6 +474,7 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -490,6 +503,7 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &backup_root,
     )
@@ -523,6 +537,7 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     );
 
@@ -547,6 +562,7 @@ fn claude_writer_pins_all_model_env_vars_when_enabled() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
         &backup_root,
     )
@@ -589,6 +605,7 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
             context_1m: true,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -628,6 +645,7 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
             context_1m: true,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -667,6 +685,7 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -710,6 +729,7 @@ fn claude_writer_sets_bypass_permissions_when_enabled() {
             context_1m: false,
             bypass_permissions: true,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -741,6 +761,7 @@ fn claude_writer_removes_bypass_permissions_when_disabled() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -767,6 +788,7 @@ fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -792,6 +814,7 @@ fn codex_writer_sets_bypass_permissions_when_enabled() {
             context_1m: false,
             bypass_permissions: true,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -827,6 +850,7 @@ fn codex_writer_removes_bypass_permissions_when_disabled() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -852,6 +876,7 @@ fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
             context_1m: false,
             bypass_permissions: false,
             max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -878,7 +903,8 @@ fn codex_writer_sets_max_reasoning_effort_when_enabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: true,
+            max_thinking_effort: true,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -896,11 +922,7 @@ fn codex_writer_sets_max_reasoning_effort_when_enabled() {
 fn codex_writer_removes_aikit_max_reasoning_effort_when_disabled() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("config.toml");
-    std::fs::write(
-        &path,
-        "model = \"old\"\nmodel_reasoning_effort = \"max\"\n",
-    )
-    .unwrap();
+    std::fs::write(&path, "model = \"old\"\nmodel_reasoning_effort = \"max\"\n").unwrap();
 
     CodexWriter::write_to_path(
         &path,
@@ -911,7 +933,8 @@ fn codex_writer_removes_aikit_max_reasoning_effort_when_disabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -939,7 +962,8 @@ fn codex_writer_preserves_custom_reasoning_effort_when_option_disabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -968,7 +992,8 @@ fn claude_writer_sets_max_effort_env_when_enabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: true,
+            max_thinking_effort: true,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -1004,7 +1029,8 @@ fn claude_writer_removes_aikit_max_effort_env_when_disabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -1012,11 +1038,9 @@ fn claude_writer_removes_aikit_max_effort_env_when_disabled() {
     let value: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(value["env"].get("CLAUDE_CODE_EFFORT_LEVEL").is_none());
-    assert!(
-        value["env"]
-            .get("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT")
-            .is_none()
-    );
+    assert!(value["env"]
+        .get("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT")
+        .is_none());
     assert_eq!(value["env"]["KEEP"], "yes");
 }
 
@@ -1039,7 +1063,8 @@ fn claude_writer_preserves_custom_effort_env_when_option_disabled() {
             claude_pin_models: false,
             context_1m: false,
             bypass_permissions: false,
-                        max_thinking_effort: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
         },
     )
     .unwrap();
@@ -1047,5 +1072,100 @@ fn claude_writer_preserves_custom_effort_env_when_option_disabled() {
     let value: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(value["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "high");
+    assert_eq!(value["env"]["KEEP"], "yes");
+}
+
+#[test]
+fn claude_writer_sets_disable_betas_env_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: true,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"], "1");
+    assert_eq!(value["env"]["KEEP"], "yes");
+    assert_eq!(value["theme"], "dark");
+}
+
+#[test]
+fn claude_writer_removes_aikit_disable_betas_env_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"env":{
+            "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS":"1",
+            "KEEP":"yes"
+        }}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(value["env"]
+        .get("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS")
+        .is_none());
+    assert_eq!(value["env"]["KEEP"], "yes");
+}
+
+#[test]
+fn claude_writer_preserves_custom_disable_betas_env_when_option_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"env":{"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS":"0","KEEP":"yes"}}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+        },
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"], "0");
     assert_eq!(value["env"]["KEEP"], "yes");
 }

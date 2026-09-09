@@ -88,7 +88,10 @@ impl CodexWriter {
                 "model_reasoning_effort".into(),
                 toml::Value::String("max".into()),
             );
-        } else if root.get("model_reasoning_effort").and_then(toml::Value::as_str) == Some("max")
+        } else if root
+            .get("model_reasoning_effort")
+            .and_then(toml::Value::as_str)
+            == Some("max")
         {
             root.remove("model_reasoning_effort");
         }

@@ -143,6 +143,7 @@ pub struct ConfigResponse {
     pub context_1m: bool,
     pub bypass_permissions: bool,
     pub max_thinking_effort: bool,
+    pub claude_disable_betas: bool,
 }
 
 impl ConfigResponse {
@@ -159,6 +160,7 @@ impl ConfigResponse {
             context_1m: config.context_1m,
             bypass_permissions: config.bypass_permissions,
             max_thinking_effort: config.max_thinking_effort,
+            claude_disable_betas: config.claude_disable_betas,
         }
     }
 }

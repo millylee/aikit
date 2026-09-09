@@ -1641,6 +1641,7 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
         context_1m: true,
         bypass_permissions: false,
         max_thinking_effort: false,
+        claude_disable_betas: false,
     }
 }
 
@@ -1657,14 +1658,17 @@ fn active_target_selection_propagates_claude_options() {
     assert!(selection.claude_pin_models);
     assert!(selection.context_1m);
     assert!(!selection.max_thinking_effort);
+    assert!(!selection.claude_disable_betas);
 
     config.claude_pin_models = false;
     config.context_1m = false;
     config.max_thinking_effort = true;
+    config.claude_disable_betas = true;
     let selection = active_target_selection(&config).unwrap();
     assert!(!selection.claude_pin_models);
     assert!(!selection.context_1m);
     assert!(selection.max_thinking_effort);
+    assert!(selection.claude_disable_betas);
 }
 
 #[test]
@@ -1753,4 +1757,22 @@ fn apply_to_navigation_covers_option_rows() {
     );
 
     assert_eq!(state.target_index, state.apply_row_count() - 1);
+}
+
+#[test]
+fn space_toggles_claude_disable_betas_option() {
+    let mut state = AppState::from_config(
+        std::path::PathBuf::from("config.toml"),
+        sample_config(std::path::PathBuf::from("codex.toml")),
+    );
+    state.focused_pane = FocusedPane::ApplyTo;
+    state.target_index = state.config.targets.len() + 4;
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+    );
+
+    assert!(state.config.claude_disable_betas);
+    assert!(state.status.contains("Disable experimental betas"));
 }

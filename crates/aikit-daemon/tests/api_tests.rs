@@ -179,6 +179,7 @@ async fn config_defaults_when_file_missing() {
     assert_eq!(json["claude_pin_models"], true);
     assert_eq!(json["bypass_permissions"], false);
     assert_eq!(json["max_thinking_effort"], false);
+    assert_eq!(json["claude_disable_betas"], false);
 }
 
 #[tokio::test]
@@ -412,7 +413,8 @@ async fn targets_update_toggles_flags() {
                     "claude_pin_models": enabled,
                     "context_1m": enabled,
                     "bypass_permissions": enabled,
-                    "max_thinking_effort": enabled
+                    "max_thinking_effort": enabled,
+                    "claude_disable_betas": enabled
                 }),
             ))
             .await
@@ -430,12 +432,14 @@ async fn targets_update_toggles_flags() {
         assert_eq!(json["context_1m"], enabled);
         assert_eq!(json["bypass_permissions"], enabled);
         assert_eq!(json["max_thinking_effort"], enabled);
+        assert_eq!(json["claude_disable_betas"], enabled);
 
         let saved = AikitConfig::load_from(&config_path).unwrap();
         assert_eq!(saved.claude_pin_models, enabled);
         assert_eq!(saved.context_1m, enabled);
         assert_eq!(saved.bypass_permissions, enabled);
         assert_eq!(saved.max_thinking_effort, enabled);
+        assert_eq!(saved.claude_disable_betas, enabled);
     }
 }
 
@@ -597,10 +601,7 @@ async fn apply_toggles_max_thinking_effort_for_both_targets() {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            body_json(response).await["max_thinking_effort"],
-            enabled
-        );
+        assert_eq!(body_json(response).await["max_thinking_effort"], enabled);
 
         let response = app
             .clone()

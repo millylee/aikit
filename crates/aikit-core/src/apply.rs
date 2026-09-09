@@ -58,6 +58,7 @@ pub fn active_target_selection(config: &AikitConfig) -> Result<TargetSelection> 
         context_1m: config.context_1m,
         bypass_permissions: config.bypass_permissions,
         max_thinking_effort: config.max_thinking_effort,
+        claude_disable_betas: config.claude_disable_betas,
     })
 }
 

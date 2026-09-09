@@ -44,6 +44,7 @@ pub struct TargetsPayload {
     pub context_1m: Option<bool>,
     pub bypass_permissions: Option<bool>,
     pub max_thinking_effort: Option<bool>,
+    pub claude_disable_betas: Option<bool>,
 }
 
 pub async fn set_targets(
@@ -56,6 +57,7 @@ pub async fn set_targets(
         && payload.context_1m.is_none()
         && payload.bypass_permissions.is_none()
         && payload.max_thinking_effort.is_none()
+        && payload.claude_disable_betas.is_none()
     {
         return Err(ApiError::BadRequest("no target updates provided".into()));
     }
@@ -89,6 +91,9 @@ pub async fn set_targets(
         }
         if let Some(value) = payload.max_thinking_effort {
             config.max_thinking_effort = value;
+        }
+        if let Some(value) = payload.claude_disable_betas {
+            config.claude_disable_betas = value;
         }
         Ok(())
     })?;

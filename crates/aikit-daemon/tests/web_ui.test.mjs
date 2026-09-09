@@ -37,6 +37,7 @@ async function mountTargets(overrides = {}) {
     context_1m: true,
     bypass_permissions: false,
     max_thinking_effort: false,
+    claude_disable_betas: false,
     ...overrides
   };
   const nodes = new Map();
@@ -91,7 +92,8 @@ for (const [flag, label] of [
   ["claude_pin_models", "固定所有 Claude 模型"],
   ["context_1m", "1M 上下文"],
   ["bypass_permissions", "Bypass 权限（危险）"],
-  ["max_thinking_effort", "最高思考强度"]
+  ["max_thinking_effort", "最高思考强度"],
+  ["claude_disable_betas", "禁用实验性 Beta（CC）"]
 ]) {
   for (const initial of [false, true]) {
     test(`${flag} submits the current checkbox value from initial ${initial}`, async () => {

@@ -365,6 +365,20 @@ fn targets_text(state: &AppState) -> String {
         "{effort_cursor} {effort_enabled} Max thinking effort"
     ));
 
+    let betas_cursor = if state.target_index == target_count + 4 {
+        ">"
+    } else {
+        " "
+    };
+    let betas_enabled = if state.config.claude_disable_betas {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    lines.push(format!(
+        "{betas_cursor} {betas_enabled} Disable experimental betas"
+    ));
+
     lines.join("\n")
 }
 
