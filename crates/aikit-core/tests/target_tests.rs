@@ -20,6 +20,8 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &backup_root,
     )
@@ -58,7 +60,7 @@ fn codex_writer_creates_missing_config() {
     std::fs::create_dir_all(&tool_dir).unwrap();
     let path = tool_dir.join("config.toml");
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -69,7 +71,10 @@ fn codex_writer_creates_missing_config() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -101,7 +106,7 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
     let dir = tempdir().unwrap();
     let path = dir.path().join(".codex").join("config.toml");
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -112,7 +117,10 @@ fn codex_writer_skips_missing_config_when_tool_dir_absent() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(matches!(result, Err(AikitError::TargetSkipped(_))));
@@ -125,7 +133,7 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "model = \"old\"\n").unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -136,7 +144,10 @@ fn codex_writer_updates_existing_config_when_tool_dir_absent() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -150,7 +161,7 @@ fn codex_writer_refuses_invalid_existing_toml() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "not = [valid").unwrap();
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -161,7 +172,10 @@ fn codex_writer_refuses_invalid_existing_toml() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(result.is_err());
@@ -183,9 +197,11 @@ fn codex_writer_serializes_special_characters_in_toml() {
         bypass_permissions: false,
         max_thinking_effort: false,
         claude_disable_betas: false,
+        claude_disable_autoupdater: false,
+        disable_telemetry: false,
     };
 
-    CodexWriter::write_to_path(&path, &selection).unwrap();
+    CodexWriter::write_to_path_with_backup_root(&path, &selection, dir.path()).unwrap();
 
     let content = std::fs::read_to_string(&path).unwrap();
     let parsed: toml::Value = toml::from_str(&content).unwrap();
@@ -241,6 +257,8 @@ fn codex_writer_enables_1m_context_with_window_settings() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &dir.path().join("aikit"),
     )
@@ -287,6 +305,8 @@ model_auto_compact_token_limit = 900000
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &dir.path().join("aikit"),
     )
@@ -329,6 +349,8 @@ model = "keep-me"
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &dir.path().join("aikit"),
     )
@@ -381,7 +403,7 @@ model_providers = "not-a-table"
 "#;
     std::fs::write(&path, original).unwrap();
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -392,7 +414,10 @@ model_providers = "not-a-table"
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(matches!(result, Err(AikitError::TargetWrite(_))));
@@ -411,7 +436,7 @@ aikit = "not-a-table"
 "#;
     std::fs::write(&path, original).unwrap();
 
-    let result = CodexWriter::write_to_path(
+    let result = CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -422,7 +447,10 @@ aikit = "not-a-table"
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(matches!(result, Err(AikitError::TargetWrite(_))));
@@ -436,7 +464,7 @@ fn claude_writer_creates_minimal_json_config() {
     std::fs::create_dir_all(&tool_dir).unwrap();
     let path = tool_dir.join("settings.json");
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -447,7 +475,10 @@ fn claude_writer_creates_minimal_json_config() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -464,7 +495,7 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
     let dir = tempdir().unwrap();
     let path = dir.path().join(".claude").join("settings.json");
 
-    let result = ClaudeWriter::write_to_path(
+    let result = ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -475,7 +506,10 @@ fn claude_writer_skips_missing_config_when_tool_dir_absent() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(matches!(result, Err(AikitError::TargetSkipped(_))));
@@ -504,6 +538,8 @@ fn claude_writer_preserves_existing_json_and_writes_native_env() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &backup_root,
     )
@@ -527,7 +563,7 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
     let original = r#"[{"existing": true}]"#;
     std::fs::write(&path, original).unwrap();
 
-    let result = ClaudeWriter::write_to_path(
+    let result = ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -538,7 +574,10 @@ fn claude_writer_refuses_json_array_root_and_preserves_file() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     );
 
     assert!(matches!(result, Err(AikitError::TargetWrite(_))));
@@ -563,6 +602,8 @@ fn claude_writer_pins_all_model_env_vars_when_enabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
         &backup_root,
     )
@@ -595,7 +636,7 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
     std::fs::create_dir_all(&tool_dir).unwrap();
     let path = tool_dir.join("settings.json");
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -606,7 +647,10 @@ fn claude_writer_applies_1m_suffix_and_compact_window() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -635,7 +679,7 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
     std::fs::create_dir_all(&tool_dir).unwrap();
     let path = tool_dir.join("settings.json");
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -646,7 +690,10 @@ fn claude_writer_does_not_double_suffix_already_suffixed_model() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -675,7 +722,7 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -686,7 +733,10 @@ fn claude_writer_disables_pin_and_compact_cleans_stale_vars() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -719,7 +769,7 @@ fn claude_writer_sets_bypass_permissions_when_enabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -730,7 +780,10 @@ fn claude_writer_sets_bypass_permissions_when_enabled() {
             bypass_permissions: true,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -751,7 +804,7 @@ fn claude_writer_removes_bypass_permissions_when_disabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -762,7 +815,10 @@ fn claude_writer_removes_bypass_permissions_when_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -778,7 +834,7 @@ fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
     let path = dir.path().join("settings.json");
     std::fs::write(&path, r#"{"permissions":{"defaultMode":"acceptEdits"}}"#).unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -789,7 +845,10 @@ fn claude_writer_preserves_custom_permission_mode_when_bypass_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -804,7 +863,7 @@ fn codex_writer_sets_bypass_permissions_when_enabled() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "model = \"old\"\n").unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -815,7 +874,10 @@ fn codex_writer_sets_bypass_permissions_when_enabled() {
             bypass_permissions: true,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -840,7 +902,7 @@ fn codex_writer_removes_bypass_permissions_when_disabled() {
     )
     .unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -851,7 +913,10 @@ fn codex_writer_removes_bypass_permissions_when_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -866,7 +931,7 @@ fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "model = \"old\"\napproval_policy = \"untrusted\"\n").unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -877,7 +942,10 @@ fn codex_writer_preserves_custom_approval_policy_when_bypass_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -894,7 +962,7 @@ fn codex_writer_sets_max_reasoning_effort_when_enabled() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "model = \"old\"\n").unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -905,7 +973,10 @@ fn codex_writer_sets_max_reasoning_effort_when_enabled() {
             bypass_permissions: false,
             max_thinking_effort: true,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -924,7 +995,7 @@ fn codex_writer_removes_aikit_max_reasoning_effort_when_disabled() {
     let path = dir.path().join("config.toml");
     std::fs::write(&path, "model = \"old\"\nmodel_reasoning_effort = \"max\"\n").unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -935,7 +1006,10 @@ fn codex_writer_removes_aikit_max_reasoning_effort_when_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -953,7 +1027,7 @@ fn codex_writer_preserves_custom_reasoning_effort_when_option_disabled() {
     )
     .unwrap();
 
-    CodexWriter::write_to_path(
+    CodexWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -964,7 +1038,10 @@ fn codex_writer_preserves_custom_reasoning_effort_when_option_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -983,7 +1060,7 @@ fn claude_writer_sets_max_effort_env_when_enabled() {
     let path = dir.path().join("settings.json");
     std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -994,7 +1071,10 @@ fn claude_writer_sets_max_effort_env_when_enabled() {
             bypass_permissions: false,
             max_thinking_effort: true,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1020,7 +1100,7 @@ fn claude_writer_removes_aikit_max_effort_env_when_disabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -1031,7 +1111,10 @@ fn claude_writer_removes_aikit_max_effort_env_when_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1054,7 +1137,7 @@ fn claude_writer_preserves_custom_effort_env_when_option_disabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -1065,7 +1148,10 @@ fn claude_writer_preserves_custom_effort_env_when_option_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1081,7 +1167,7 @@ fn claude_writer_sets_disable_betas_env_when_enabled() {
     let path = dir.path().join("settings.json");
     std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -1092,7 +1178,10 @@ fn claude_writer_sets_disable_betas_env_when_enabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: true,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1116,7 +1205,7 @@ fn claude_writer_removes_aikit_disable_betas_env_when_disabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -1127,7 +1216,10 @@ fn claude_writer_removes_aikit_disable_betas_env_when_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1149,7 +1241,7 @@ fn claude_writer_preserves_custom_disable_betas_env_when_option_disabled() {
     )
     .unwrap();
 
-    ClaudeWriter::write_to_path(
+    ClaudeWriter::write_to_path_with_backup_root(
         &path,
         &TargetSelection {
             base_url: "https://example.com/v1".into(),
@@ -1160,7 +1252,10 @@ fn claude_writer_preserves_custom_disable_betas_env_when_option_disabled() {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
         },
+        dir.path(),
     )
     .unwrap();
 
@@ -1168,4 +1263,313 @@ fn claude_writer_preserves_custom_disable_betas_env_when_option_disabled() {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(value["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"], "0");
     assert_eq!(value["env"]["KEEP"], "yes");
+}
+
+#[test]
+fn claude_writer_sets_disable_autoupdater_env_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
+
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: true,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["env"]["DISABLE_AUTOUPDATER"], "1");
+    assert_eq!(value["env"]["KEEP"], "yes");
+    assert_eq!(value["theme"], "dark");
+}
+
+#[test]
+fn claude_writer_removes_aikit_disable_autoupdater_env_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"env":{
+            "DISABLE_AUTOUPDATER":"1",
+            "KEEP":"yes"
+        }}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(value["env"].get("DISABLE_AUTOUPDATER").is_none());
+    assert_eq!(value["env"]["KEEP"], "yes");
+}
+
+#[test]
+fn claude_writer_keeps_user_disable_autoupdater_value_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"env":{"DISABLE_AUTOUPDATER":"0"}}"#).unwrap();
+
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["env"]["DISABLE_AUTOUPDATER"], "0");
+}
+
+#[test]
+fn claude_writer_sets_disable_telemetry_env_when_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"theme":"dark","env":{"KEEP":"yes"}}"#).unwrap();
+
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: true,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        value["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"],
+        "1"
+    );
+    assert_eq!(value["env"]["KEEP"], "yes");
+    assert_eq!(value["theme"], "dark");
+}
+
+#[test]
+fn claude_writer_removes_aikit_disable_telemetry_env_when_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{"env":{
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1",
+            "KEEP":"yes"
+        }}"#,
+    )
+    .unwrap();
+
+    ClaudeWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "claude-model".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(value["env"]
+        .get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+        .is_none());
+    assert_eq!(value["env"]["KEEP"], "yes");
+}
+
+#[test]
+fn codex_writer_sets_analytics_disabled_when_telemetry_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: true,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        parsed
+            .get("analytics")
+            .and_then(|v| v.get("enabled"))
+            .and_then(|v| v.as_bool()),
+        Some(false)
+    );
+}
+
+#[test]
+fn codex_writer_keeps_other_analytics_keys_when_telemetry_disabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[analytics]\nsample_rate = 0.5\n").unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: true,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        parsed
+            .get("analytics")
+            .and_then(|v| v.get("enabled"))
+            .and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        parsed
+            .get("analytics")
+            .and_then(|v| v.get("sample_rate"))
+            .and_then(|v| v.as_float()),
+        Some(0.5)
+    );
+}
+
+#[test]
+fn codex_writer_removes_aikit_analytics_when_telemetry_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[analytics]\nenabled = false\n").unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(parsed.get("analytics").is_none());
+}
+
+#[test]
+fn codex_writer_keeps_user_analytics_and_remaining_keys_when_telemetry_enabled() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[analytics]\nenabled = true\nsample_rate = 0.5\n").unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
+    let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let analytics = parsed.get("analytics").unwrap();
+    assert_eq!(
+        analytics.get("enabled").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        analytics.get("sample_rate").and_then(|v| v.as_float()),
+        Some(0.5)
+    );
 }
