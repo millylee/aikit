@@ -1642,6 +1642,8 @@ fn sample_config(codex_path: std::path::PathBuf) -> AikitConfig {
         bypass_permissions: false,
         max_thinking_effort: false,
         claude_disable_betas: false,
+        claude_disable_autoupdater: false,
+        disable_telemetry: false,
     }
 }
 

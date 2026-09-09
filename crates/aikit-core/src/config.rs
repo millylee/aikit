@@ -29,6 +29,10 @@ pub struct AikitConfig {
     pub max_thinking_effort: bool,
     #[serde(default)]
     pub claude_disable_betas: bool,
+    #[serde(default)]
+    pub claude_disable_autoupdater: bool,
+    #[serde(default)]
+    pub disable_telemetry: bool,
     #[serde(default, skip_serializing)]
     pub backup_history: Vec<BackupRecord>,
 }
@@ -142,6 +146,8 @@ impl Default for AikitConfig {
             bypass_permissions: false,
             max_thinking_effort: false,
             claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
             backup_history: Vec::new(),
         }
     }

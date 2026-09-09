@@ -17,10 +17,6 @@ use super::{
 pub struct ClaudeWriter;
 
 impl ClaudeWriter {
-    pub fn write_to_path(path: &Path, selection: &TargetSelection) -> Result<TargetWriteResult> {
-        Self::write_to_path_inner(path, selection, None)
-    }
-
     pub fn write_to_path_with_backup_root(
         path: &Path,
         selection: &TargetSelection,
@@ -137,6 +133,27 @@ impl ClaudeWriter {
         {
             env_object.remove("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS");
         }
+        if selection.claude_disable_autoupdater {
+            env_object.insert("DISABLE_AUTOUPDATER".into(), Value::String("1".to_string()));
+        } else if env_object
+            .get("DISABLE_AUTOUPDATER")
+            .and_then(Value::as_str)
+            == Some("1")
+        {
+            env_object.remove("DISABLE_AUTOUPDATER");
+        }
+        if selection.disable_telemetry {
+            env_object.insert(
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".into(),
+                Value::String("1".to_string()),
+            );
+        } else if env_object
+            .get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+            .and_then(Value::as_str)
+            == Some("1")
+        {
+            env_object.remove("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC");
+        }
         object.insert("model".into(), Value::String(effective_model.clone()));
 
         if selection.bypass_permissions {
@@ -183,7 +200,7 @@ impl TargetWriter for ClaudeWriter {
     }
 
     fn write(&self, selection: &TargetSelection) -> Result<TargetWriteResult> {
-        Self::write_to_path(&self.default_path()?, selection)
+        Self::write_to_path_inner(&self.default_path()?, selection, None)
     }
 }
 

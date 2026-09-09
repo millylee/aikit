@@ -46,6 +46,8 @@ fn saves_and_loads_config_as_toml() {
         bypass_permissions: false,
         max_thinking_effort: false,
         claude_disable_betas: false,
+        claude_disable_autoupdater: false,
+        disable_telemetry: false,
     };
 
     config.save_with_sidecars(&path).unwrap();
@@ -96,6 +98,8 @@ fn update_prompt_skipped_version_persists_in_state_sidecar() {
         bypass_permissions: false,
         max_thinking_effort: false,
         claude_disable_betas: false,
+        claude_disable_autoupdater: false,
+        disable_telemetry: false,
     };
 
     config.save_with_sidecars(&path).unwrap();

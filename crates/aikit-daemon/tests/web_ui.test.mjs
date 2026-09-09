@@ -38,6 +38,8 @@ async function mountTargets(overrides = {}) {
     bypass_permissions: false,
     max_thinking_effort: false,
     claude_disable_betas: false,
+    claude_disable_autoupdater: false,
+    disable_telemetry: false,
     ...overrides
   };
   const nodes = new Map();
@@ -159,6 +161,8 @@ async function mountApp(overrides = {}) {
     bypass_permissions: false,
     max_thinking_effort: false,
     claude_disable_betas: false,
+    claude_disable_autoupdater: false,
+    disable_telemetry: false,
     ...overrides.config || {}
   };
   const nodes = new Map();
