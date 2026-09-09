@@ -1,6 +1,6 @@
 use super::{
-    load_config, mutate_config, ApiError, ApiKeyPayload, ApiKeyResponse, AppState, ProviderPayload,
-    ProviderResponse,
+    load_config, mutate_config, ApiError, ApiKeyPayload, ApiKeyResponse, AppState, ModelPayload,
+    ProviderPayload, ProviderResponse,
 };
 use aikit_core::config_ops::{ApiKeyForm, ProviderForm};
 use axum::{
@@ -143,6 +143,47 @@ pub async fn delete_api_key(
         aikit_core::config_ops::delete_api_key(config, &id, &key_id)
     })?;
     Ok(Json(serde_json::json!({ "deleted": key_id })))
+}
+
+pub async fn create_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(payload): Json<ModelPayload>,
+) -> Result<(StatusCodeJson, Json<serde_json::Value>), ApiError> {
+    if payload.model.trim().is_empty() {
+        return Err(ApiError::BadRequest("model id cannot be empty".into()));
+    }
+    mutate_config(&state, |config| {
+        aikit_core::config_ops::add_model(config, &id, &payload.model)
+    })?;
+    let manual_models = manual_models_by_provider(&state, &id)?;
+    Ok((
+        StatusCodeJson::CREATED,
+        Json(serde_json::json!({ "manual_models": manual_models })),
+    ))
+}
+
+pub async fn delete_model(
+    State(state): State<AppState>,
+    Path((id, model_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    if !manual_models_by_provider(&state, &id)?.contains(&model_id) {
+        return Err(ApiError::NotFound(format!("model not found: {model_id}")));
+    }
+    mutate_config(&state, |config| {
+        aikit_core::config_ops::delete_model(config, &id, &model_id)
+    })?;
+    Ok(Json(serde_json::json!({ "deleted": model_id })))
+}
+
+fn manual_models_by_provider(state: &AppState, id: &str) -> Result<Vec<String>, ApiError> {
+    let config = load_config(&state.config_path)?;
+    config
+        .providers
+        .iter()
+        .find(|provider| provider.id == id)
+        .map(|provider| provider.manual_models.clone())
+        .ok_or_else(|| ApiError::NotFound(format!("provider not found: {id}")))
 }
 
 fn provider_form(payload: ProviderPayload) -> Result<ProviderForm, ApiError> {

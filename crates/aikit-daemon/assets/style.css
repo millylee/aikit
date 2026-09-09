@@ -118,6 +118,30 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px;
 .toast.ok { border-left-color: var(--ok); }
 .toast.error { border-left-color: var(--danger); }
 .toast.leaving { opacity: 0; transform: translateX(12px); transition: opacity 0.35s ease-in, transform 0.35s ease-in; }
+#modal-root { position: fixed; inset: 0; z-index: 2000; }
+#modal-root .modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#modal-root .modal-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  padding: 16px 18px;
+  width: 440px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+#modal-root .modal-card h3 { margin: 0 0 6px; font-size: 14px; }
+#modal-root .modal-card .row { margin: 8px 0; }
+#modal-root .modal-card .modal-actions { justify-content: flex-end; margin-top: 12px; }
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: none; }

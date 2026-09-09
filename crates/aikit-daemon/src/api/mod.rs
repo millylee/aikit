@@ -18,7 +18,7 @@ use axum::{
     http::{header, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 
@@ -56,6 +56,11 @@ pub fn router(token: &str, config_path: PathBuf) -> Router {
                 .delete(providers::delete_provider),
         )
         .route("/providers/{id}/keys", post(providers::create_api_key))
+        .route("/providers/{id}/models", post(providers::create_model))
+        .route(
+            "/providers/{id}/models/{model_id}",
+            delete(providers::delete_model),
+        )
         .route(
             "/providers/{id}/keys/{key_id}",
             put(providers::update_api_key).delete(providers::delete_api_key),
@@ -132,6 +137,11 @@ pub struct ApiKeyPayload {
     pub id: Option<String>,
     pub name: String,
     pub value: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ModelPayload {
+    pub model: String,
 }
 
 #[derive(serde::Serialize)]

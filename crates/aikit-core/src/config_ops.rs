@@ -185,6 +185,18 @@ pub fn delete_api_key(config: &mut AikitConfig, provider_id: &str, key_id: &str)
     Ok(())
 }
 
+pub fn add_model(config: &mut AikitConfig, provider_id: &str, model: &str) -> Result<()> {
+    let model = model.trim();
+    if model.is_empty() {
+        return Err(AikitError::Provider("model id cannot be empty".into()));
+    }
+    let provider = provider_mut(config, provider_id)?;
+    if !provider.manual_models.iter().any(|manual| manual == model) {
+        provider.manual_models.push(model.to_string());
+    }
+    Ok(())
+}
+
 pub fn delete_model(config: &mut AikitConfig, provider_id: &str, model: &str) -> Result<()> {
     let provider = provider_mut(config, provider_id)?;
     let model_index = provider

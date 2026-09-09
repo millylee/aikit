@@ -633,6 +633,108 @@ async fn apply_toggles_max_thinking_effort_for_both_targets() {
 }
 
 #[tokio::test]
+async fn manual_models_add_and_delete_roundtrip() {
+    let (app, _dir) = seeded_router();
+
+    let response = app
+        .clone()
+        .oneshot(post_json(
+            "/api/providers/p1/models",
+            serde_json::json!({ "model": "glm-5.4" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let json = body_json(response).await;
+    assert_eq!(
+        json["manual_models"][json["manual_models"].as_array().unwrap().len() - 1],
+        "glm-5.4"
+    );
+
+    // Adding the same model again is idempotent.
+    let response = app
+        .clone()
+        .oneshot(post_json(
+            "/api/providers/p1/models",
+            serde_json::json!({ "model": "glm-5.4" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let json = body_json(response).await;
+    assert_eq!(
+        json["manual_models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|value| *value == "glm-5.4")
+            .count(),
+        1
+    );
+
+    // Empty model id is rejected.
+    let response = app
+        .clone()
+        .oneshot(post_json(
+            "/api/providers/p1/models",
+            serde_json::json!({ "model": "   " }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let response = app
+        .clone()
+        .oneshot(delete_json("/api/providers/p1/models/glm-5.4"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = body_json(response).await;
+    assert_eq!(json["deleted"], "glm-5.4");
+
+    let response = app
+        .clone()
+        .oneshot(delete_json("/api/providers/p1/models/glm-5.4"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_manual_model_clears_active_selection() {
+    let (app, _dir) = seeded_router();
+    // seeded config has manual-model in manual_models and m1 active; select manual-model first.
+    let response = app
+        .clone()
+        .oneshot(put_json(
+            "/api/selection",
+            serde_json::json!({
+                "provider_id": "p1",
+                "api_key_id": "k1",
+                "model_id": "manual-model"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(delete_json("/api/providers/p1/models/manual-model"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(authorized_get("/api/config"))
+        .await
+        .unwrap();
+    let json = body_json(response).await;
+    assert!(json["active_selection"].is_null());
+}
+
+#[tokio::test]
 async fn import_apply_adds_provider() {
     let dir = tempfile::tempdir().unwrap();
     let app = router("test-token", dir.path().join("config.toml"));
