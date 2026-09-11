@@ -44,13 +44,7 @@ fn codex_writer_creates_backup_before_writing_existing_config() {
     );
 
     let auth_path = dir.path().join("auth.json");
-    assert!(auth_path.exists());
-    let auth_json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
-    assert_eq!(
-        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
-        Some("sk-new")
-    );
+    assert!(!auth_path.exists());
 }
 
 #[test]
@@ -92,13 +86,7 @@ fn codex_writer_creates_missing_config() {
     );
 
     let auth_path = tool_dir.join("auth.json");
-    assert!(auth_path.exists());
-    let auth_json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
-    assert_eq!(
-        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
-        Some("sk-new")
-    );
+    assert!(!auth_path.exists());
 }
 
 #[test]
@@ -231,13 +219,7 @@ fn codex_writer_serializes_special_characters_in_toml() {
     assert_eq!(provider.get("name").and_then(|v| v.as_str()), Some("aikit"));
 
     let auth_path = dir.path().join("auth.json");
-    assert!(auth_path.exists());
-    let auth_json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
-    assert_eq!(
-        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
-        Some(selection.api_key.as_str())
-    );
+    assert!(!auth_path.exists());
 }
 
 #[test]
@@ -384,13 +366,122 @@ model = "keep-me"
         Some("model-new")
     );
     let auth_path = dir.path().join("auth.json");
-    assert!(auth_path.exists());
+    assert!(!auth_path.exists());
+}
+
+#[test]
+fn codex_writer_removes_stale_auth_api_key_and_deletes_empty_auth_file() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+    let auth_path = dir.path().join("auth.json");
+    std::fs::write(&auth_path, r#"{"OPENAI_API_KEY":"sk-stale"}"#).unwrap();
+    let backup_root = dir.path().join("aikit");
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        &backup_root,
+    )
+    .unwrap();
+
+    assert!(!auth_path.exists());
+    let backup_dir = backup_root.join("backups").join("codex");
+    let has_auth_backup = std::fs::read_dir(&backup_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .any(|entry| entry.file_name().to_string_lossy().ends_with("auth.json"));
+    assert!(has_auth_backup);
+}
+
+#[test]
+fn codex_writer_removes_stale_auth_api_key_but_preserves_other_auth_fields() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+    let auth_path = dir.path().join("auth.json");
+    std::fs::write(
+        &auth_path,
+        r#"{"OPENAI_API_KEY":"sk-stale","tokens":{"id_token":"tok"}}"#,
+    )
+    .unwrap();
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        dir.path(),
+    )
+    .unwrap();
+
     let auth_json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
+        serde_json::from_str(&std::fs::read_to_string(&auth_path).unwrap()).unwrap();
+    assert!(auth_json.get("OPENAI_API_KEY").is_none());
     assert_eq!(
-        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
-        Some("sk-new")
+        auth_json
+            .get("tokens")
+            .and_then(|v| v.get("id_token"))
+            .and_then(|v| v.as_str()),
+        Some("tok")
     );
+}
+
+#[test]
+fn codex_writer_leaves_auth_file_without_api_key_untouched() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "model = \"old\"\n").unwrap();
+    let auth_path = dir.path().join("auth.json");
+    let original = r#"{"tokens":{"id_token":"tok"}}"#;
+    std::fs::write(&auth_path, original).unwrap();
+    let backup_root = dir.path().join("aikit");
+
+    CodexWriter::write_to_path_with_backup_root(
+        &path,
+        &TargetSelection {
+            base_url: "https://example.com/v1".into(),
+            api_key: "sk-new".into(),
+            model: "model-new".into(),
+            claude_pin_models: false,
+            context_1m: false,
+            bypass_permissions: false,
+            max_thinking_effort: false,
+            claude_disable_betas: false,
+            claude_disable_autoupdater: false,
+            disable_telemetry: false,
+        },
+        &backup_root,
+    )
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(&auth_path).unwrap(), original);
+    let backup_dir = backup_root.join("backups").join("codex");
+    let has_auth_backup = std::fs::read_dir(&backup_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .any(|entry| entry.file_name().to_string_lossy().ends_with("auth.json"));
+    assert!(!has_auth_backup);
 }
 
 #[test]

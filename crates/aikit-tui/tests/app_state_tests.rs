@@ -893,13 +893,7 @@ fn apply_active_selection_writes_enabled_targets_and_skips_disabled_targets() {
     );
 
     let auth_path = dir.path().join(".codex").join("auth.json");
-    assert!(auth_path.exists());
-    let auth_json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(auth_path).unwrap()).unwrap();
-    assert_eq!(
-        auth_json.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
-        Some("sk-active")
-    );
+    assert!(!auth_path.exists());
 }
 
 #[test]

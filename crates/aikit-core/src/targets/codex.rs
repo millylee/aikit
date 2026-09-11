@@ -174,26 +174,7 @@ impl CodexWriter {
 
         if let Some(parent) = path.parent() {
             let auth_path = parent.join("auth.json");
-            let mut auth_val = if auth_path.exists() {
-                let existing = fs::read_to_string(&auth_path)?;
-                serde_json::from_str::<serde_json::Value>(&existing)
-                    .unwrap_or_else(|_| serde_json::json!({}))
-            } else {
-                serde_json::json!({})
-            };
-            if !auth_val.is_object() {
-                auth_val = serde_json::json!({});
-            }
-            if let Some(obj) = auth_val.as_object_mut() {
-                obj.insert(
-                    "OPENAI_API_KEY".into(),
-                    serde_json::Value::String(selection.api_key.clone()),
-                );
-            }
-            let auth_content = serde_json::to_string_pretty(&auth_val).map_err(|err| {
-                AikitError::TargetWrite(format!("failed to serialize codex auth config: {err}"))
-            })?;
-            fs::write(auth_path, auth_content)?;
+            remove_stale_auth_api_key(&auth_path, backup_root)?;
         }
 
         let content = toml::to_string(&toml::Value::Table(root)).map_err(|err| {
@@ -207,6 +188,45 @@ impl CodexWriter {
             backup_path: config_backup_path,
         })
     }
+}
+
+/// Codex reads `auth.json` ahead of the provider's `env_key`, so a key
+/// previously written there by aikit keeps shadowing AIKIT_API_KEY. Drop the
+/// stale entry (backing the file up first) and remove the file entirely when
+/// nothing else remains in it.
+fn remove_stale_auth_api_key(auth_path: &Path, backup_root: Option<&Path>) -> Result<()> {
+    let existing = match fs::read_to_string(auth_path) {
+        Ok(existing) => existing,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    let mut value = match serde_json::from_str::<serde_json::Value>(&existing) {
+        Ok(value) => value,
+        Err(_) => return Ok(()),
+    };
+    let Some(obj) = value.as_object_mut() else {
+        return Ok(());
+    };
+    if obj.remove("OPENAI_API_KEY").is_none() {
+        return Ok(());
+    }
+    match backup_root {
+        Some(root) => {
+            backup_file_to_root("codex", auth_path, root)?;
+        }
+        None => {
+            backup_file("codex", auth_path)?;
+        }
+    }
+    if obj.is_empty() {
+        fs::remove_file(auth_path)?;
+    } else {
+        let content = serde_json::to_string_pretty(&value).map_err(|err| {
+            AikitError::TargetWrite(format!("failed to serialize codex auth config: {err}"))
+        })?;
+        fs::write(auth_path, content)?;
+    }
+    Ok(())
 }
 
 fn set_aikit_api_key_env(api_key: &str, persist_user_scope: bool, _home_dir: &Path) {
